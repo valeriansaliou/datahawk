@@ -1,0 +1,9 @@
+# macOS files
+.DS_Store
+
+# Build resources
+build/
+
+# Environment variables
+local.env
+.claude/settings.local.json
