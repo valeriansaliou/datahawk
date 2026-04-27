@@ -2,7 +2,7 @@
 
 **DataHawk** is a lightweight macOS menu bar app that monitors your 5G mobile hotspot in real time. It sits quietly in the status bar and displays live cellular metrics — signal strength, data usage, battery level, and more — fetched directly from your router's admin API.
 
-Supported hotspots:
+✅ Supported hotspots:
 
 - **NETGEAR**
   - **Nighthawk** (M3, M6, M6 Pro).
@@ -11,7 +11,7 @@ Supported hotspots:
 
 ## Screenshots
 
-<img width="1616" height="888" alt="datahawk-screenshot-1" src="https://github.com/user-attachments/assets/07978787-c3e6-49d0-ab6a-0268f4e76c67" />
+![datahawk-screenshot-1](https://github.com/user-attachments/assets/07978787-c3e6-49d0-ab6a-0268f4e76c67)
 
 ---
 
