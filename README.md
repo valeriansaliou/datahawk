@@ -2,7 +2,10 @@
 
 **DataHawk** is a lightweight macOS menu bar app that monitors your 5G mobile hotspot in real time. It sits quietly in the status bar and displays live cellular metrics — signal strength, data usage, battery level, and more — fetched directly from your router's admin API.
 
-Currently supports **NETGEAR Nighthawk** (M3, M6, M6 Pro).
+Supported hotspots:
+
+- **NETGEAR**
+  - **Nighthawk** (M3, M6, M6 Pro).
 
 ---
 
@@ -27,21 +30,8 @@ Currently supports **NETGEAR Nighthawk** (M3, M6, M6 Pro).
   - Faded cellular bars when signal is lost
   - Blinking antenna while the first fetch is in progress
 - **WiFi QR share** — Option-click the icon (or use the QR button) to show a scannable QR code for joining the router's WiFi
-- **Auto-launch at login** via ServiceManagement
-- **Configurable refresh interval** (5 s – 1 h)
-- No Dock icon, no menubar clutter — pure status bar utility
-
----
-
-## Requirements
-
-| | |
-|---|---|
-| **macOS** | 13.0 Ventura or later |
-| **Architecture** | Apple Silicon (arm64) or Intel (x86\_64) |
-| **Xcode CLI tools** | Required to build (`xcode-select --install`) |
-
-> **Location Services** — DataHawk requests "always" location permission on first launch. This is required by macOS 10.15+ before `CoreWLAN` will return the BSSID of the current access point, which is how the app identifies which hotspot is in range. No location data is ever stored or transmitted.
+- **Auto-launch** at login
+- No Dock icon, no menubar clutter — _pure status bar utility_
 
 ---
 
@@ -72,14 +62,14 @@ Pass your signing identity to skip the interactive prompt:
 make SIGN_ID="Developer ID Application: Your Name (XXXXXXXXXX)"
 ```
 
-Leave it empty to build without signing (works fine for local use).
+Leave it empty to build without signing (works fine for local use). You can also add this to a `local.env` file (prefixed with `export`).
 
 ---
 
 ## Setup
 
 1. Launch DataHawk — the antenna icon appears in the menu bar.
-2. Grant **Location Services** permission when prompted (needed for BSSID detection).
+2. Grant **Location Services** permission when prompted (needed for WiFi BSSID detection).
 3. Click the icon → **Settings** → **Hotspots** tab → **Add Hotspot**.
 4. Fill in the details for your router:
 
@@ -88,7 +78,7 @@ Leave it empty to build without signing (works fine for local use).
 | **Name** | A label you'll recognise, e.g. "Office M6 Pro" |
 | **BSSID** | The MAC address of the router's WiFi radio (shown in the disconnected view if unknown) |
 | **Vendor** | Router manufacturer (currently: NETGEAR) |
-| **Username** | Router admin username (default: `admin`) |
+| **Username** | Router admin username |
 | **Password** | Router admin password |
 | **Admin URL** *(optional)* | Override the auto-detected admin URL, e.g. `http://192.168.1.1` |
 
@@ -107,10 +97,10 @@ Alternatively, find it in **System Settings → Wi-Fi → Details → BSSID**.
 | Action | Result |
 |---|---|
 | **Click** the icon | Open / close the metrics popover |
-| **Click ↻** in the popover | Soft refresh (reuses cached auth) |
-| **Option-click ↻** | Force full re-authentication + refresh |
-| **Option-click** the icon | Show WiFi QR code share sheet |
-| **Click QR button** | Show WiFi QR code share sheet |
+| **Click ↻** in the popover | Force a refresh of metrics |
+| **Option-click ↻** | Force full refresh of metrics (re-authenticates) |
+| **Option-click** the icon | Show WiFi QR code share window |
+| **Click QR button** | Show WiFi QR code share window |
 | **Click Settings** | Open the hotspot and options configuration window |
 
 ---
