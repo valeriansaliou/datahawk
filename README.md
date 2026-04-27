@@ -7,13 +7,9 @@
 - **NETGEAR**
   - **Nighthawk** (M3, M6, M6 Pro).
 
----
-
 ## Screenshots
 
 ![datahawk-screenshot-1](https://github.com/user-attachments/assets/07978787-c3e6-49d0-ab6a-0268f4e76c67)
-
----
 
 ## Features
 
@@ -38,8 +34,6 @@
 - **WiFi QR share** — Option-click the icon (or use the QR button) to show a scannable QR code for joining the router's WiFi
 - **Auto-launch** at login
 - No Dock icon, no menubar clutter — _pure status bar utility_
-
----
 
 ## Building
 
@@ -70,8 +64,6 @@ make SIGN_ID="Developer ID Application: Your Name (XXXXXXXXXX)"
 
 Leave it empty to build without signing (works fine for local use). You can also add this to a `local.env` file (prefixed with `export`).
 
----
-
 ## Setup
 
 1. Launch DataHawk — the antenna icon appears in the menu bar.
@@ -96,8 +88,6 @@ The BSSID is the MAC address of the router's WiFi access point. When DataHawk is
 
 Alternatively, find it in **System Settings → Wi-Fi → Details → BSSID**.
 
----
-
 ## Usage
 
 | Action | Result |
@@ -108,8 +98,6 @@ Alternatively, find it in **System Settings → Wi-Fi → Details → BSSID**.
 | **Option-click** the icon | Show WiFi QR code share window |
 | **Click QR button** | Show WiFi QR code share window |
 | **Click Settings** | Open the hotspot and options configuration window |
-
----
 
 ## License
 
