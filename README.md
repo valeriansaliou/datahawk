@@ -6,6 +6,7 @@
 
 - **NETGEAR**
   - **Nighthawk** (M3, M6, M6 Pro).
+- _Want to add a hotspot vendor? We accept PRs!_
 
 ## Screenshots
 
