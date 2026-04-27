@@ -7,10 +7,19 @@ import Combine
 class ConfigStore: ObservableObject {
     static let shared = ConfigStore()
 
-    private let defaultsKey = "datahawk.hotspots.v1"
+    private let hotspotsKey       = "datahawk.hotspots.v1"
+    private let refreshIntervalKey = "datahawk.refreshInterval.v1"
 
     @Published var hotspots: [HotspotConfig] = [] {
         didSet { persist() }
+    }
+
+    @Published var refreshInterval: Int = 60 {
+        didSet {
+            let clamped = max(5, min(3600, refreshInterval))
+            if clamped != refreshInterval { refreshInterval = clamped; return }
+            UserDefaults.standard.set(refreshInterval, forKey: refreshIntervalKey)
+        }
     }
 
     private init() {
@@ -44,14 +53,17 @@ class ConfigStore: ObservableObject {
 
     private func persist() {
         guard let data = try? JSONEncoder().encode(hotspots) else { return }
-        UserDefaults.standard.set(data, forKey: defaultsKey)
+        UserDefaults.standard.set(data, forKey: hotspotsKey)
     }
 
     private func load() {
-        guard
-            let data    = UserDefaults.standard.data(forKey: defaultsKey),
-            let decoded = try? JSONDecoder().decode([HotspotConfig].self, from: data)
-        else { return }
-        hotspots = decoded
+        if let data    = UserDefaults.standard.data(forKey: hotspotsKey),
+           let decoded = try? JSONDecoder().decode([HotspotConfig].self, from: data) {
+            hotspots = decoded
+        }
+        let stored = UserDefaults.standard.integer(forKey: refreshIntervalKey)
+        if stored > 0 {
+            refreshInterval = max(5, min(3600, stored))
+        }
     }
 }

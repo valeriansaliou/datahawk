@@ -19,7 +19,7 @@ private actor FetchGate {
 class RouterService {
     static let shared = RouterService()
 
-    private let pollInterval      : TimeInterval = 60
+    private var pollInterval      : TimeInterval { TimeInterval(ConfigStore.shared.refreshInterval) }
     private let retryInterval     : TimeInterval = 10
     private var pollingTask: Task<Void, Never>?
     private var refreshTask: Task<Void, Never>?

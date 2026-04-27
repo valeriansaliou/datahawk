@@ -20,12 +20,12 @@ class SettingsWindowController: NSObject, NSWindowDelegate {
         let hosting = NSHostingController(rootView: SettingsView())
 
         let win = NSWindow(
-            contentRect : NSRect(x: 0, y: 0, width: 460, height: 360),
+            contentRect : NSRect(x: 0, y: 0, width: 460, height: 440),
             styleMask   : [.titled, .closable, .miniaturizable],
             backing     : .buffered,
             defer       : false
         )
-        win.title                    = "DataHawk — Settings"
+        win.title                    = "Manage known hotspots"
         win.contentViewController    = hosting
         win.isReleasedWhenClosed     = false
         win.delegate                 = self

@@ -3,48 +3,49 @@ import SwiftUI
 // MARK: - Settings root view
 
 struct SettingsView: View {
+    var body: some View {
+        TabView {
+            HotspotsTab()
+                .tabItem { Label("Hotspots", systemImage: "antenna.radiowaves.left.and.right") }
+
+            OptionsTab()
+                .tabItem { Label("Options", systemImage: "slider.horizontal.3") }
+        }
+        .frame(width: 380, height: 420)
+    }
+}
+
+// MARK: - Hotspots tab
+
+private struct HotspotsTab: View {
     @ObservedObject private var store = ConfigStore.shared
-    @State private var showingForm    = false
-    @State private var editTarget     : HotspotConfig? = nil
+    @State private var showingForm = false
+    @State private var editTarget  : HotspotConfig? = nil
 
     var body: some View {
         VStack(spacing: 0) {
-            // Toolbar
-            HStack {
-                Text("Known Hotspots")
-                    .font(.headline)
-                Spacer()
-                Button {
-                    editTarget   = nil
-                    showingForm  = true
-                } label: {
-                    Image(systemName: "plus")
-                }
-                .buttonStyle(.borderless)
-                .help("Add a new hotspot")
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+            toolbar
 
             Divider()
 
             if store.hotspots.isEmpty {
                 emptyState
             } else {
-                List {
-                    ForEach(store.hotspots) { hotspot in
-                        HotspotRowView(hotspot: hotspot) {
-                            editTarget  = hotspot
-                            showingForm = true
-                        } onDelete: {
-                            store.remove(id: hotspot.id)
+                ScrollView {
+                    LazyVStack(spacing: 8) {
+                        ForEach(store.hotspots) { hotspot in
+                            HotspotRowView(hotspot: hotspot) {
+                                editTarget  = hotspot
+                                showingForm = true
+                            } onDelete: {
+                                store.remove(id: hotspot.id)
+                            }
                         }
                     }
+                    .padding(16)
                 }
-                .listStyle(.plain)
             }
         }
-        .frame(width: 460, height: 360)
         .sheet(isPresented: $showingForm) {
             HotspotFormView(existing: editTarget) {
                 showingForm = false
@@ -52,21 +53,109 @@ struct SettingsView: View {
         }
     }
 
-    private var emptyState: some View {
-        VStack(spacing: 10) {
+    // MARK: - Toolbar
+
+    private var toolbar: some View {
+        HStack(alignment: .center, spacing: 0) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Hotspots")
+                    .font(.title3)
+                    .fontWeight(.semibold)
+                Text("\(store.hotspots.count) router\(store.hotspots.count == 1 ? "" : "s") configured")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             Spacer()
-            Image(systemName: "antenna.radiowaves.left.and.right.slash")
-                .font(.system(size: 36))
-                .foregroundColor(.secondary)
-            Text("No hotspots configured")
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-            Text("Click + to add a known router.")
-                .font(.caption)
-                .foregroundColor(.secondary)
+
+            Button {
+                editTarget  = nil
+                showingForm = true
+            } label: {
+                Label("Add Hotspot", systemImage: "plus")
+                    .font(.system(size: 12, weight: .medium))
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.small)
+            .onHover { inside in
+                if inside { NSCursor.pointingHand.push() } else { NSCursor.pop() }
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 14)
+    }
+
+    // MARK: - Empty state
+
+    private var emptyState: some View {
+        VStack(spacing: 14) {
+            Spacer()
+
+            ZStack {
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(Color.accentColor.opacity(0.10))
+                    .frame(width: 72, height: 72)
+                Image(systemName: "antenna.radiowaves.left.and.right.slash")
+                    .font(.system(size: 30, weight: .light))
+                    .foregroundStyle(Color.accentColor)
+            }
+
+            VStack(spacing: 5) {
+                Text("No hotspots yet")
+                    .font(.headline)
+                Text("Add your router to start monitoring\nyour 5G hotspot metrics.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+
+            Button {
+                editTarget  = nil
+                showingForm = true
+            } label: {
+                Label("Add First Hotspot", systemImage: "plus")
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.regular)
+            .padding(.top, 4)
+            .onHover { inside in
+                if inside { NSCursor.pointingHand.push() } else { NSCursor.pop() }
+            }
+
             Spacer()
         }
         .frame(maxWidth: .infinity)
+    }
+}
+
+// MARK: - Options tab
+
+private struct OptionsTab: View {
+    @ObservedObject private var store = ConfigStore.shared
+
+    var body: some View {
+        Form {
+            Section {
+                HStack {
+                    Text("Auto-refresh every")
+                    Spacer()
+                    Stepper(value: $store.refreshInterval, in: 5...3600, step: 5) {
+                        EmptyView()
+                    }
+                    .labelsHidden()
+                    Text("\(store.refreshInterval)s")
+                        .monospacedDigit()
+                        .frame(width: 46, alignment: .trailing)
+                }
+            } header: {
+                Text("Data refresh")
+            } footer: {
+                Text("How often DataHawk fetches metrics from your router. Minimum 5 seconds.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+        }
+        .formStyle(.grouped)
     }
 }
 
@@ -77,31 +166,87 @@ private struct HotspotRowView: View {
     let onEdit   : () -> Void
     let onDelete : () -> Void
 
+    @State private var isHovered = false
+
     var body: some View {
-        HStack(alignment: .center, spacing: 12) {
+        HStack(alignment: .center, spacing: 14) {
+
+            // Icon badge
+            ZStack {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(Color.accentColor.opacity(0.12))
+                    .frame(width: 42, height: 42)
+                Image(systemName: "antenna.radiowaves.left.and.right")
+                    .font(.system(size: 17, weight: .regular))
+                    .foregroundStyle(Color.accentColor)
+            }
+
+            // Labels
             VStack(alignment: .leading, spacing: 3) {
                 Text(hotspot.name)
-                    .font(.body)
-                HStack(spacing: 8) {
+                    .font(.system(size: 13, weight: .semibold))
+                HStack(spacing: 6) {
                     Text(hotspot.vendor.rawValue)
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
+                    Text("·")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
                     Text(hotspot.macAddress)
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                         .fontDesign(.monospaced)
                 }
             }
+
             Spacer()
-            Button("Edit",   action: onEdit)
-                .buttonStyle(.borderless)
-                .font(.caption)
-            Button("Delete", action: onDelete)
-                .buttonStyle(.borderless)
-                .font(.caption)
-                .foregroundColor(.red)
+
+            // Action buttons (shown on hover)
+            if isHovered {
+                HStack(spacing: 4) {
+                    IconButton(systemImage: "pencil", help: "Edit") { onEdit() }
+                    IconButton(systemImage: "trash", help: "Delete", tint: .red) { onDelete() }
+                }
+            }
         }
-        .padding(.vertical, 4)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(isHovered ? Color.primary.opacity(0.04) : Color.clear)
+        )
+        .contentShape(Rectangle())
+        .onHover { isHovered = $0 }
+    }
+}
+
+// MARK: - Icon button
+
+private struct IconButton: View {
+    let systemImage : String
+    var help        : String = ""
+    var tint        : Color  = .secondary
+    let action      : () -> Void
+
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(isHovered ? tint : tint.opacity(0.7))
+                .frame(width: 28, height: 28)
+                .background(
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        .fill(isHovered ? tint.opacity(0.12) : Color.clear)
+                )
+        }
+        .buttonStyle(.plain)
+        .help(help)
+        .onHover { inside in
+            isHovered = inside
+            if inside { NSCursor.pointingHand.push() } else { NSCursor.pop() }
+        }
     }
 }
 
@@ -126,8 +271,8 @@ struct HotspotFormView: View {
         VStack(spacing: 0) {
             Form {
                 Section("Identity") {
-                    TextField("Friendly name (e.g. Office M6 Pro)", text: $name)
-                    TextField("MAC address  (aa:bb:cc:dd:ee:ff)",  text: $macAddress)
+                    TextField("Name (e.g. My Hotspot)", text: $name)
+                    TextField("BSSID (aa:bb:cc:dd:ee:ff)",  text: $macAddress)
                         .fontDesign(.monospaced)
                     Picker("Vendor", selection: $vendor) {
                         ForEach(RouterVendor.allCases) { v in
@@ -142,12 +287,12 @@ struct HotspotFormView: View {
                 }
 
                 Section {
-                    TextField("Base URL  (leave empty to auto-detect)", text: $customBaseURL)
+                    TextField("Admin URL", text: $customBaseURL)
                         .fontDesign(.monospaced)
                 } header: {
                     Text("Advanced")
                 } footer: {
-                    Text("When empty, DataHawk detects the router IP from the active network route.")
+                    Text("When empty, DataHawk detects the router admin URL automatically.")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
@@ -158,6 +303,9 @@ struct HotspotFormView: View {
 
             HStack {
                 Button("Cancel", action: onDismiss)
+                    .onHover { inside in
+                        if inside { NSCursor.pointingHand.push() } else { NSCursor.pop() }
+                    }
                 Spacer()
                 Button(isEditing ? "Save" : "Add") {
                     commit()
@@ -165,6 +313,9 @@ struct HotspotFormView: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(name.isEmpty || macAddress.isEmpty || username.isEmpty)
+                .onHover { inside in
+                    if inside { NSCursor.pointingHand.push() } else { NSCursor.pop() }
+                }
             }
             .padding()
         }

@@ -7,6 +7,7 @@ class StatusBarController: NSObject, NSPopoverDelegate {
     private var statusItem    : NSStatusItem!
     private var popover       : NSPopover!
     private var clickMonitor       : Any?
+    private var keyMonitor         : Any?
     private var frameObserver      : NSKeyValueObservation?
 
     private let wifiMonitor  = WiFiMonitor()
@@ -91,16 +92,28 @@ class StatusBarController: NSObject, NSPopoverDelegate {
             // Auto-focus so keyboard events (and ESC) work without clicking first.
             NSApp.activate(ignoringOtherApps: true)
             popoverWindow.makeKey()
+
+            // Re-apply highlight right after AppKit's mouseUp clears the press state.
+            DispatchQueue.main.async { [weak self] in
+                guard self?.isPopoverVisible == true else { return }
+                self?.statusItem.button?.highlight(true)
+            }
         }
 
-        DispatchQueue.main.async { self.statusItem.button?.highlight(true) }
-
         // Global monitor catches clicks on system UI (other tray icons, Dock, etc.)
-        // that NSPopover's .transient behavior misses because they run in a
-        // separate process (SystemUIServer).
+        // that NSPopover's .applicationDefined behavior doesn't handle automatically.
         clickMonitor = NSEvent.addGlobalMonitorForEvents(
             matching: [.leftMouseDown, .rightMouseDown]
         ) { [weak self] _ in self?.hidePopover() }
+
+        // Local monitor catches ESC (not handled natively with .applicationDefined).
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            if event.keyCode == 53 { // 53 = Escape
+                self?.hidePopover()
+                return nil
+            }
+            return event
+        }
     }
 
     private func hidePopover() {
@@ -111,9 +124,10 @@ class StatusBarController: NSObject, NSPopoverDelegate {
     private var isPopoverVisible: Bool { popover.isShown }
 
     func popoverDidClose(_ notification: Notification) {
-        statusItem.button?.highlight(false)
         if let m = clickMonitor { NSEvent.removeMonitor(m); clickMonitor = nil }
+        if let m = keyMonitor   { NSEvent.removeMonitor(m); keyMonitor   = nil }
         frameObserver?.invalidate(); frameObserver = nil
+        statusItem.button?.highlight(false)
     }
 
     // MARK: - State observer (icon updates)
@@ -208,6 +222,13 @@ class StatusBarController: NSObject, NSPopoverDelegate {
     // MARK: - Click handler
 
     @objc private func handleClick(_ sender: Any?) {
+        if NSEvent.modifierFlags.contains(.option) {
+            if let m = AppState.shared.metrics, m.wifiEnabled,
+               let ssid = m.wifiSSID, let pass = m.wifiPassphrase {
+                WiFiQRWindowController.shared.show(ssid: ssid, passphrase: pass)
+                return
+            }
+        }
         if isPopoverVisible {
             hidePopover()
         } else {
