@@ -268,6 +268,14 @@ class StatusBarController: NSObject, NSPopoverDelegate {
         ) { [weak self] _ in
             self?.checkConnection()
         }
+
+        NotificationCenter.default.addObserver(
+            forName: .datahawkHidePopover,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.hidePopover()
+        }
     }
 
     // MARK: - Connection check

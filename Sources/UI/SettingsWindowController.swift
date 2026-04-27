@@ -63,4 +63,8 @@ extension Notification.Name {
     /// Posted when the Settings window closes, signalling that hotspot
     /// configurations may have changed.
     static let datahawkSettingsDidClose = Notification.Name("com.datahawk.settingsDidClose")
+
+    /// Posted when an action (open admin UI, show QR code) should immediately
+    /// close the popover.
+    static let datahawkHidePopover = Notification.Name("com.datahawk.hidePopover")
 }

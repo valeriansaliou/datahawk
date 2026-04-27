@@ -319,6 +319,7 @@ struct AdminButtonSection: View {
         guard let urlStr = state.metrics?.adminURL,
               let url = URL(string: urlStr) else { return }
 
+        NotificationCenter.default.post(name: .datahawkHidePopover, object: nil)
         NSWorkspace.shared.open(url)
     }
 
@@ -327,6 +328,7 @@ struct AdminButtonSection: View {
               let ssid = m.wifiSSID,
               let pass = m.wifiPassphrase else { return }
 
+        NotificationCenter.default.post(name: .datahawkHidePopover, object: nil)
         WiFiQRWindowController.shared.show(ssid: ssid, passphrase: pass)
     }
 }

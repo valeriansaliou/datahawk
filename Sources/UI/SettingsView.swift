@@ -1,8 +1,9 @@
 // SettingsView.swift
 // DataHawk
 //
-// Settings window with two tabs: Hotspots (CRUD for monitored routers)
-// and Options (refresh interval). Presented by SettingsWindowController.
+// Settings window with three tabs: Hotspots (CRUD for monitored routers),
+// Options (refresh interval), and About (version, author, links).
+// Presented by SettingsWindowController.
 
 import SwiftUI
 
@@ -16,6 +17,9 @@ struct SettingsView: View {
 
             OptionsTab()
                 .tabItem { Label("Options", systemImage: "slider.horizontal.3") }
+
+            AboutTab()
+                .tabItem { Label("About", systemImage: "info.circle") }
         }
         .frame(width: 380, height: 420)
     }
@@ -167,6 +171,73 @@ private struct OptionsTab: View {
             }
         }
         .formStyle(.grouped)
+    }
+}
+
+// MARK: - About tab
+
+/// Shows app name, version, author, a GitHub link, and a disabled "Check for Updates" button.
+private struct AboutTab: View {
+    private let githubURL = URL(string: "https://github.com/valeriansaliou/datahawk")!
+
+    private var appVersion: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown"
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Spacer()
+
+            VStack(spacing: 20) {
+                // App icon badge.
+                ZStack {
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        .fill(Color.accentColor.opacity(0.10))
+                        .frame(width: 80, height: 80)
+                    Image(systemName: "antenna.radiowaves.left.and.right")
+                        .font(.system(size: 34, weight: .light))
+                        .foregroundStyle(Color.accentColor)
+                }
+
+                // Name + version + author.
+                VStack(spacing: 5) {
+                    Text("DataHawk")
+                        .font(.title2)
+                        .fontWeight(.bold)
+                    Text("Version \(appVersion)")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                    Text("by Valerian Saliou")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                }
+
+                // Actions.
+                VStack(spacing: 10) {
+                    Link(destination: githubURL) {
+                        Label("View on GitHub", systemImage: "arrow.up.right.square")
+                            .font(.system(size: 12, weight: .medium))
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .onHover { inside in
+                        if inside { NSCursor.pointingHand.push() } else { NSCursor.pop() }
+                    }
+
+                    Button {
+                        // Not yet implemented.
+                    } label: {
+                        Label("Check for Updates", systemImage: "arrow.clockwise")
+                            .font(.system(size: 12, weight: .medium))
+                    }
+                    .controlSize(.small)
+                    .disabled(true)
+                }
+            }
+
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
