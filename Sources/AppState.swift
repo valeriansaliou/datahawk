@@ -16,6 +16,8 @@ import Combine
 /// appearance from this value.
 enum ConnectionState: Equatable {
     /// No WiFi network, or the current BSSID is not in the configured list.
+    case noHotspot
+    /// A known hotspot was detected but no fetch has been attempted yet.
     case disconnected
     /// A known hotspot was detected; the first metrics fetch is in progress.
     case loading
@@ -49,7 +51,7 @@ class AppState: ObservableObject {
 
     // -- Connection lifecycle --------------------------------------------------
 
-    @Published var connectionState: ConnectionState = .disconnected
+    @Published var connectionState: ConnectionState = .noHotspot
     @Published var activeHotspot: HotspotConfig?    = nil
     @Published var lastUpdated: Date?               = nil
 

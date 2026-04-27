@@ -6,9 +6,11 @@
 // mode and the highlighted (blue) menu-bar state.
 //
 // Icon states:
-//   - Disconnected / Failed : faded antenna at 35 % opacity
-//   - Loading               : antenna blinking (caller varies alpha)
-//   - Connected (no signal) : exclamation transmission symbol
+//   - No hotspot            : slashed antenna at full opacity (template)
+//   - Disconnected          : faded normal antenna at 35 % opacity
+//   - Failed                : faded normal antenna at 35 % opacity
+//   - Loading               : antenna blinking (caller varies alpha via opacity)
+//   - Connected (no signal) : faded cellular-bars at 35 % opacity
 //   - Connected (signal)    : text badge ("5G", "4G", ...) coloured by alerts
 
 import AppKit
@@ -31,14 +33,17 @@ enum IconRenderer {
         highDataUsage: Bool = false
     ) -> NSImage {
         switch state {
+        case .noHotspot:
+            // Slashed antenna at full opacity — not on any known hotspot network.
+            return sfSymbol("antenna.radiowaves.left.and.right.slash")
+
         case .disconnected, .failed:
-            // Faded white antenna at 35 % opacity.
+            // Faded normal antenna at 35 % opacity — hotspot known but no data yet.
             let base   = tintedSFIcon("antenna.radiowaves.left.and.right", color: .white)
             let result = NSImage(size: base.size, flipped: false) { rect in
                 base.draw(in: rect, from: .zero, operation: .sourceOver, fraction: 0.35)
                 return true
             }
-
             result.isTemplate = false
             return result
 

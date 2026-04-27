@@ -31,7 +31,7 @@ struct PopoverView: View {
             }
 
             // Main content: disconnected placeholder or live metrics.
-            if state.connectionState == .disconnected {
+            if state.connectionState == .noHotspot || state.connectionState == .disconnected {
                 Divider()
                 DisconnectedSection()
             } else if state.metrics != nil {
@@ -89,8 +89,8 @@ struct HeaderSection: View {
                     .clipShape(Capsule())
             }
 
-            // Refresh button / spinner (hidden when disconnected).
-            if state.connectionState != .disconnected {
+            // Refresh button / spinner (hidden when not on a known hotspot).
+            if state.connectionState != .noHotspot && state.connectionState != .disconnected {
                 if state.isFetching {
                     ProgressView()
                         .scaleEffect(0.45)
@@ -147,8 +147,12 @@ struct HeaderSection: View {
     @ViewBuilder
     private var subtitleText: some View {
         switch state.connectionState {
-        case .disconnected:
+        case .noHotspot:
             Text("No hotspot detected")
+                .font(.caption)
+                .foregroundColor(.secondary)
+        case .disconnected:
+            Text("Connecting\u{2026}")
                 .font(.caption)
                 .foregroundColor(.secondary)
         case .loading:
@@ -176,11 +180,13 @@ struct HeaderSection: View {
     // MARK: - Battery helpers
 
     private var isInactive: Bool {
-        state.connectionState == .disconnected || state.connectionState == .failed
+        state.connectionState == .noHotspot
+            || state.connectionState == .disconnected
+            || state.connectionState == .failed
     }
 
     private var iconName: String {
-        isInactive
+        state.connectionState == .noHotspot
             ? "antenna.radiowaves.left.and.right.slash"
             : "antenna.radiowaves.left.and.right"
     }

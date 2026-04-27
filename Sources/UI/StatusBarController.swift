@@ -58,7 +58,7 @@ class StatusBarController: NSObject, NSPopoverDelegate {
 
         guard let button = statusItem.button else { return }
 
-        button.image  = IconRenderer.icon(state: .disconnected, networkType: nil)
+        button.image  = IconRenderer.icon(state: .noHotspot, networkType: nil)
         button.action = #selector(handleClick)
         button.target = self
 
@@ -234,14 +234,7 @@ class StatusBarController: NSObject, NSPopoverDelegate {
                 self.statusItem.button?.image = IconRenderer.loadingIcon(alpha: alpha)
             }
 
-        case .failed:
-            blinkTimer?.invalidate()
-            blinkTimer = nil
-            statusItem.button?.image = IconRenderer.icon(
-                state: .disconnected, networkType: nil
-            )
-
-        case .disconnected, .connected:
+        case .noHotspot, .disconnected, .failed, .connected:
             blinkTimer?.invalidate()
             blinkTimer = nil
             statusItem.button?.image = IconRenderer.icon(
@@ -302,11 +295,11 @@ class StatusBarController: NSObject, NSPopoverDelegate {
             }
         } else {
             // No known hotspot — tear down everything.
-            if state.activeHotspot != nil || state.connectionState != .disconnected {
+            if state.activeHotspot != nil || state.connectionState != .noHotspot {
                 state.activeHotspot   = nil
                 state.metrics         = nil
                 state.fetchError      = nil
-                state.connectionState = .disconnected
+                state.connectionState = .noHotspot
                 state.lastUpdated     = nil
                 RouterService.shared.stop()
             }
