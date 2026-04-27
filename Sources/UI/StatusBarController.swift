@@ -127,11 +127,6 @@ class StatusBarController: NSObject, NSPopoverDelegate {
             // space switch on some Spaces configurations.
             popoverWindow.makeKeyAndOrderFront(nil)
 
-            // Re-apply button highlight after AppKit's mouseUp clears it.
-            DispatchQueue.main.async { [weak self] in
-                guard self?.popover.isShown == true else { return }
-                self?.statusItem.button?.highlight(true)
-            }
         }
 
         // Global monitor: catches clicks on other system UI (tray icons, Dock)
@@ -158,7 +153,7 @@ class StatusBarController: NSObject, NSPopoverDelegate {
     private func hidePopover() {
         popover.performClose(nil)
 
-        // Note: remaining cleanup (key monitor, frame observer, highlight)
+        // Note: remaining cleanup (key monitor, frame observer)
         // happens in popoverDidClose(_:) to handle all dismissal paths.
     }
 
@@ -173,7 +168,6 @@ class StatusBarController: NSObject, NSPopoverDelegate {
         frameObserver?.invalidate()
         frameObserver = nil
 
-        statusItem.button?.highlight(false)
     }
 
     // MARK: - State observer (icon updates)
