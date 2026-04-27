@@ -13,8 +13,6 @@ Supported hotspots:
 
 <img width="1616" height="888" alt="datahawk-screenshot-1" src="https://github.com/user-attachments/assets/07978787-c3e6-49d0-ab6a-0268f4e76c67" />
 
-<img width="1800" height="993" alt="datahawk-screenshot-2" src="https://github.com/user-attachments/assets/d32b4fc3-3375-4459-84fa-e234c4f1cea8" />
-
 ---
 
 ## Features
