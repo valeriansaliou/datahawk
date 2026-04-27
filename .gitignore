@@ -4,7 +4,7 @@
 # Build resources
 .build/
 DataHawk.app
-DataHawk-*.dmg
+DataHawk.dmg
 
 # Environment variables
 local.env

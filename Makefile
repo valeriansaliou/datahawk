@@ -16,7 +16,7 @@ MACOS_DIR  := $(CONTENTS)/MacOS
 RES_DIR    := $(CONTENTS)/Resources
 
 DIST_APP   := $(APPNAME).app
-DMG_NAME   := $(APPNAME)-$(VERSION).dmg
+DMG_NAME   := $(APPNAME).dmg
 DMG_PATH   := $(BUILD_DIR)/$(DMG_NAME)
 DMG_STAGE  := $(BUILD_DIR)/dmg-stage
 
@@ -103,5 +103,5 @@ run: all
 	@open "$(DIST_APP)"
 
 clean:
-	@rm -rf "$(BUILD_DIR)" "$(DIST_APP)" "$(APPNAME)"-*.dmg
+	@rm -rf "$(BUILD_DIR)" "$(DIST_APP)" "$(DMG_NAME)"
 	@echo "Cleaned"
