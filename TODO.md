@@ -2,10 +2,27 @@
 
 ## ↪️ Not Done
 
+### Features
+
 - [ ] Make an icon for the app
 - [ ] Apple Notarization
 - [ ] Publish releases
 - [ ] Automatic updates
+
+### Tests
+
+- [ ] Test app in macOS light mode
+- [ ] Test power states with battery inserted
+- [ ] Test all variations of NETGEAR settings
+  - [ ] 3G + 4G technologies
+  - [ ] No data limit
+  - [ ] SIM card is locked
+  - [ ] WiFi is off
+  - [ ] APN is not connected
+
+### Others
+
+- [ ] Make the GitHub project public
 
 ## ✅ Done
 
