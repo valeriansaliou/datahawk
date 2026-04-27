@@ -228,6 +228,7 @@ struct FooterSection: View {
     var body: some View {
         HStack {
             Button {
+                NotificationCenter.default.post(name: .datahawkHidePopover, object: nil)
                 SettingsWindowController.shared.show()
             } label: {
                 HStack(spacing: 3) {

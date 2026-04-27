@@ -59,7 +59,10 @@ struct DisconnectedSection: View {
                 Text("Add your router in ")
                     .font(.caption)
                     .foregroundColor(.secondary)
-                Button("Settings") { SettingsWindowController.shared.show() }
+                Button("Settings") {
+                    NotificationCenter.default.post(name: .datahawkHidePopover, object: nil)
+                    SettingsWindowController.shared.show()
+                }
                     .buttonStyle(.link)
                     .font(.caption)
                     .onHover { inside in
