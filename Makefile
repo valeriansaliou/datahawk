@@ -61,6 +61,7 @@ $(DIST_APP): $(SOURCES) Resources/Info.plist
 	else \
 	  codesign --force --deep --options runtime --sign "$$sign_id" $(APP_BUNDLE); \
 	fi
+	@rm -rf "$(DIST_APP)"
 	@mv "$(APP_BUNDLE)" "$(DIST_APP)"
 	@echo "Built $(DIST_APP) ($(VERSION))"
 
