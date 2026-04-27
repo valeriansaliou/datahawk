@@ -37,32 +37,50 @@
 
 ## Building
 
+Requires Xcode Command Line Tools (`xcode-select --install`). No third-party dependencies.
+
 ```bash
 # Clone the repo
 git clone https://github.com/valeriansaliou/datahawk.git
 cd datahawk
 
-# Build the app bundle
+# Build DataHawk.app in the project root
 make
 
-# Build and launch immediately
+# Build and launch immediately (kills any running instance first)
 make all-dev
 
-# Clean build artefacts
+# Clean all build artefacts
 make clean
 ```
 
-The build produces `.build/DataHawk.app`. You can move it to `/Applications` like any other app.
+`make` produces `DataHawk.app` in the project root. Drag it to `/Applications` to install.
 
 ### Code signing (optional)
 
-Pass your signing identity to skip the interactive prompt:
+Pass your Developer ID signing identity to skip the interactive prompt:
 
 ```bash
 make SIGN_ID="Developer ID Application: Your Name (XXXXXXXXXX)"
 ```
 
-Leave it empty to build without signing (works fine for local use). You can also add this to a `local.env` file (prefixed with `export`).
+Leave it empty to build without signing (works fine for local use). You can also persist it in a `local.env` file (gitignored):
+
+```bash
+echo 'export SIGN_ID="Developer ID Application: Your Name (XXXXXXXXXX)"' >> local.env
+```
+
+### Creating a release DMG
+
+```bash
+# Build and package into DataHawk-<version>.dmg (ad-hoc signed)
+make dmg
+
+# Full release: build, sign with Developer ID, and package
+make release SIGN_ID="Developer ID Application: Your Name (XXXXXXXXXX)"
+```
+
+The DMG (`DataHawk-<version>.dmg`) is created in the project root and contains the app bundle alongside an `/Applications` shortcut. The version is derived automatically from the latest git tag (format: `v0.1.0`).
 
 ## Setup
 
