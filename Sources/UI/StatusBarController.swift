@@ -115,10 +115,17 @@ class StatusBarController: NSObject, NSPopoverDelegate {
                 }
             }
 
+            // Anchor the popover to all spaces so it appears on whichever
+            // space the user is on, rather than pulling them to the app's
+            // origin space (avoids forced space switches with 3rd-party
+            // Spaces animation tools).
+            popoverWindow.collectionBehavior = [.canJoinAllSpaces, .transient]
+
             // Auto-focus the popover so keyboard events (ESC) work
-            // without the user clicking inside first.
-            NSApp.activate(ignoringOtherApps: true)
-            popoverWindow.makeKey()
+            // without the user clicking inside first. Avoid the full
+            // NSApp.activate(ignoringOtherApps:) call — it triggers a
+            // space switch on some Spaces configurations.
+            popoverWindow.makeKeyAndOrderFront(nil)
 
             // Re-apply button highlight after AppKit's mouseUp clears it.
             DispatchQueue.main.async { [weak self] in

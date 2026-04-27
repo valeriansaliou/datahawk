@@ -8,10 +8,11 @@
 - [ ] Apple Notarization
 - [ ] Publish releases
 - [ ] Automatic updates
+- [ ] (..)
 
 ### Bugs
 
-- [ ] When showing popover from another macOS space, it switches back to origin space
+- [ ] (..)
 
 ### Tests
 
@@ -23,10 +24,12 @@
   - [ ] SIM card is locked
   - [ ] WiFi is off
   - [ ] APN is not connected
+- [ ] (..)
 
 ### Others
 
 - [ ] Make the GitHub project public
+- [ ] (..)
 
 ## ✅ Done
 
@@ -36,3 +39,4 @@
 - [x] About section in settings
 - [x] App version detection using Git tags
 - [x] DMG maker
+- [x] When showing popover from another macOS space, it switches back to origin space
