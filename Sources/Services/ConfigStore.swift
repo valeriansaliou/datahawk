@@ -9,6 +9,7 @@
 
 import Foundation
 import Combine
+import ServiceManagement
 
 class ConfigStore: ObservableObject {
     static let shared = ConfigStore()
@@ -17,12 +18,31 @@ class ConfigStore: ObservableObject {
 
     private let hotspotsKey        = "datahawk.hotspots.v1"
     private let refreshIntervalKey = "datahawk.refreshInterval.v1"
+    private let launchAtLoginKey   = "datahawk.launchAtLogin.v1"
 
     // MARK: - Published state
 
     /// All configured hotspots. Automatically persisted on every mutation.
     @Published var hotspots: [HotspotConfig] = [] {
         didSet { persist() }
+    }
+
+    /// Whether to register as a login item. Defaults to true (auto-start on
+    /// login). Persisted to UserDefaults; toggling calls SMAppService.
+    @Published var launchAtLogin: Bool = true {
+        didSet {
+            UserDefaults.standard.set(launchAtLogin, forKey: launchAtLoginKey)
+
+            do {
+                if launchAtLogin {
+                    try SMAppService.mainApp.register()
+                } else {
+                    try SMAppService.mainApp.unregister()
+                }
+            } catch {
+                print("[DataHawk] Login item update failed: \(error.localizedDescription)")
+            }
+        }
     }
 
     /// Polling interval in seconds (clamped to 5–3600). Persisted to
@@ -100,6 +120,13 @@ class ConfigStore: ObservableObject {
 
         if stored > 0 {
             refreshInterval = max(5, min(3600, stored))
+        }
+
+        // Launch at login (nil means "never stored" — default to true and register).
+        if UserDefaults.standard.object(forKey: launchAtLoginKey) != nil {
+            launchAtLogin = UserDefaults.standard.bool(forKey: launchAtLoginKey)
+        } else {
+            launchAtLogin = true  // first launch: enable and register
         }
     }
 }

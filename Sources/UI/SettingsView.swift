@@ -149,6 +149,16 @@ private struct OptionsTab: View {
     var body: some View {
         Form {
             Section {
+                Toggle("Launch at login", isOn: $store.launchAtLogin)
+            } header: {
+                Text("General")
+            } footer: {
+                Text("Start DataHawk automatically when you log in.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+
+            Section {
                 HStack {
                     Text("Auto-refresh every")
                     Spacer()

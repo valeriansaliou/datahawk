@@ -6,7 +6,6 @@
 // permission (required for BSSID detection on macOS 10.15+).
 
 import AppKit
-import ServiceManagement
 
 class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusBarController: StatusBarController!
@@ -17,14 +16,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Keep the app out of the Dock even if Info.plist's LSUIElement was
         // somehow overridden at runtime.
         NSApp.setActivationPolicy(.accessory)
-
-        // Register as a login item so the app launches automatically on boot.
-        // Failure is non-fatal — the app works fine without auto-launch.
-        do {
-            try SMAppService.mainApp.register()
-        } catch {
-            print("[DataHawk] Login item registration failed: \(error.localizedDescription)")
-        }
 
         // Boot the status-bar icon and begin monitoring WiFi.
         statusBarController = StatusBarController()
