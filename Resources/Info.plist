@@ -24,7 +24,7 @@
     <key>NSHighResolutionCapable</key>
     <true/>
     <key>LSMinimumSystemVersion</key>
-    <string>13.0</string>
+    <string>26.0</string>
     <!-- Required for CWInterface.bssid() on macOS 10.15+ -->
     <key>NSLocationWhenInUseUsageDescription</key>
     <string>DataHawk reads your WiFi network's access point address to detect known hotspots.</string>

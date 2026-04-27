@@ -10,8 +10,8 @@ Developer context for Claude Code. Read this before making changes.
 
 - **Bundle ID**: `com.datahawk.app`
 - **Version**: 0.1.0
-- **Min macOS**: 13.0 Ventura
-- **Architectures**: arm64, x86_64 (auto-detected at build time)
+- **Min macOS**: 26.0 Tahoe
+- **Architecture**: arm64 (Apple Silicon only)
 
 ---
 

@@ -22,13 +22,7 @@ DMG_STAGE  := $(BUILD_DIR)/dmg-stage
 
 SIGN_ID    ?=
 
-# Detect host architecture automatically
-ARCH       := $(shell uname -m)
-ifeq ($(ARCH),arm64)
-  TARGET   := arm64-apple-macos13.0
-else
-  TARGET   := x86_64-apple-macos13.0
-endif
+TARGET     := arm64-apple-macos26.0
 
 SWIFT      := xcrun swiftc
 SWIFT_FLAGS := \
