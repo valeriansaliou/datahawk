@@ -1,10 +1,18 @@
+// WiFiMonitor.swift
+// DataHawk
+//
+// Monitors WiFi connectivity via NWPathMonitor and exposes the current SSID
+// and BSSID on demand. Fires `onNetworkChange` whenever the path changes
+// (connect, disconnect, roam) so the caller can re-check which hotspot is
+// in range.
+
 import Foundation
 import CoreWLAN
 import Network
 
-/// Monitors WiFi connectivity and fires `onNetworkChange` whenever the path
-/// changes (connect, disconnect, roam).  The current BSSID is read on-demand.
 class WiFiMonitor {
+
+    /// Called on the main thread whenever the WiFi path changes.
     var onNetworkChange: (() -> Void)?
 
     private let monitor = NWPathMonitor(requiredInterfaceType: .wifi)
@@ -14,8 +22,10 @@ class WiFiMonitor {
 
     func start() {
         monitor.pathUpdateHandler = { [weak self] _ in
+            // Bounce to main so the callback can safely touch AppKit / AppState.
             DispatchQueue.main.async { self?.onNetworkChange?() }
         }
+
         monitor.start(queue: queue)
     }
 
@@ -25,11 +35,15 @@ class WiFiMonitor {
 
     // MARK: - SSID detection
 
-    /// Returns the SSID of the currently associated access point via CoreWLAN.
+    /// Returns the SSID of the currently associated WiFi network, or `nil`
+    /// if no interface is connected.
     func currentSSID() -> String? {
         for iface in CWWiFiClient.shared().interfaces() ?? [] {
-            if let ssid = iface.ssid(), !ssid.isEmpty { return ssid }
+            if let ssid = iface.ssid(), !ssid.isEmpty {
+                return ssid
+            }
         }
+
         return nil
     }
 
@@ -37,21 +51,24 @@ class WiFiMonitor {
 
     /// Returns the BSSID of the currently associated access point.
     ///
-    /// Strategy:
-    ///   1. CoreWLAN `CWInterface.bssid()` — works when Location Services is
-    ///      granted (macOS 10.15+).
-    ///   2. `ipconfig getsummary <iface>` — reads from configd, no location
-    ///      permission required; reliable fallback.
+    /// Two strategies are tried in order:
+    ///
+    ///   1. **CoreWLAN** (`CWInterface.bssid()`) — the preferred method, but
+    ///      returns `nil` unless Location Services is granted (macOS 10.15+).
+    ///
+    ///   2. **ipconfig getsummary** — reads from configd with no location
+    ///      permission required. Reliable fallback when the user hasn't
+    ///      granted location access yet.
     func currentBSSID() -> String? {
         let client = CWWiFiClient.shared()
 
-        // Collect all WiFi interface names so we can try each one.
+        // Collect all WiFi interface names for the ipconfig fallback.
         let ifaceNames: [String] = (client.interfaces() ?? [])
             .compactMap { $0.interfaceName }
             .filter { !$0.isEmpty }
             .nonEmptyOrDefault(["en0", "en1"])
 
-        // 1 — CoreWLAN (requires location permission)
+        // Strategy 1: CoreWLAN (requires location permission).
         for iface in client.interfaces() ?? [] {
             if let bssid = iface.bssid(), !bssid.isEmpty {
                 print("[DataHawk] BSSID via CoreWLAN (\(iface.interfaceName ?? "?")): \(bssid)")
@@ -59,7 +76,7 @@ class WiFiMonitor {
             }
         }
 
-        // 2 — ipconfig getsummary fallback
+        // Strategy 2: ipconfig getsummary (no location permission needed).
         for name in ifaceNames {
             if let bssid = bssidViaIPConfig(interface: name) {
                 print("[DataHawk] BSSID via ipconfig (\(name)): \(bssid)")
@@ -71,43 +88,61 @@ class WiFiMonitor {
         return nil
     }
 
-    // MARK: - ipconfig fallback
+    // MARK: - ipconfig fallback (private)
 
+    /// Shells out to `/usr/sbin/ipconfig getsummary <iface>` and parses the
+    /// BSSID from the key-value output. Lines look like:
+    ///
+    ///     BSSID : aa:bb:cc:dd:ee:ff
+    ///
     private func bssidViaIPConfig(interface: String) -> String? {
         let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/sbin/ipconfig")
-        process.arguments     = ["getsummary", interface]
+
+        process.executableURL  = URL(fileURLWithPath: "/usr/sbin/ipconfig")
+        process.arguments      = ["getsummary", interface]
+
         let outPipe = Pipe()
+
         process.standardOutput = outPipe
-        process.standardError  = Pipe()   // silence errors
+        process.standardError  = Pipe()   // silence stderr
 
         guard (try? process.run()) != nil else { return nil }
+
         process.waitUntilExit()
+
         guard process.terminationStatus == 0 else { return nil }
 
-        let output = String(data: outPipe.fileHandleForReading.readDataToEndOfFile(),
-                            encoding: .utf8) ?? ""
+        let output = String(
+            data: outPipe.fileHandleForReading.readDataToEndOfFile(),
+            encoding: .utf8
+        ) ?? ""
 
-        // Lines look like:  "  BSSID : aa:bb:cc:dd:ee:ff"
         for line in output.components(separatedBy: "\n") {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
-            // Split on " : " to separate key from value
+
+            // Split on " : " to separate key from value.
             let parts = trimmed.components(separatedBy: " : ")
+
             guard parts.count >= 2,
                   parts[0].trimmingCharacters(in: .whitespaces).uppercased() == "BSSID"
             else { continue }
-            let bssid = parts[1...].joined(separator: " : ")
+
+            let bssid = parts[1...]
+                .joined(separator: " : ")
                 .trimmingCharacters(in: .whitespaces)
                 .lowercased()
+
             if !bssid.isEmpty { return bssid }
         }
+
         return nil
     }
 }
 
-// MARK: - Helpers
+// MARK: - Array helper
 
 private extension Array {
+    /// Returns `self` when non-empty, otherwise a fallback default.
     func nonEmptyOrDefault(_ fallback: [Element]) -> [Element] {
         isEmpty ? fallback : self
     }

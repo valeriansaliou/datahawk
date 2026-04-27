@@ -1,6 +1,12 @@
+// SettingsView.swift
+// DataHawk
+//
+// Settings window with two tabs: Hotspots (CRUD for monitored routers)
+// and Options (refresh interval). Presented by SettingsWindowController.
+
 import SwiftUI
 
-// MARK: - Settings root view
+// MARK: - Root settings view
 
 struct SettingsView: View {
     var body: some View {
@@ -17,15 +23,17 @@ struct SettingsView: View {
 
 // MARK: - Hotspots tab
 
+/// Lists all configured hotspots with hover-reveal edit / delete buttons.
+/// An "Add Hotspot" button and an empty-state CTA are provided.
 private struct HotspotsTab: View {
     @ObservedObject private var store = ConfigStore.shared
+
     @State private var showingForm = false
-    @State private var editTarget  : HotspotConfig? = nil
+    @State private var editTarget: HotspotConfig? = nil
 
     var body: some View {
         VStack(spacing: 0) {
             toolbar
-
             Divider()
 
             if store.hotspots.isEmpty {
@@ -130,6 +138,7 @@ private struct HotspotsTab: View {
 
 // MARK: - Options tab
 
+/// Simple form with a stepper for the auto-refresh interval.
 private struct OptionsTab: View {
     @ObservedObject private var store = ConfigStore.shared
 
@@ -139,10 +148,12 @@ private struct OptionsTab: View {
                 HStack {
                     Text("Auto-refresh every")
                     Spacer()
+
                     Stepper(value: $store.refreshInterval, in: 5...3600, step: 5) {
                         EmptyView()
                     }
                     .labelsHidden()
+
                     Text("\(store.refreshInterval)s")
                         .monospacedDigit()
                         .frame(width: 46, alignment: .trailing)
@@ -161,17 +172,18 @@ private struct OptionsTab: View {
 
 // MARK: - Hotspot row
 
+/// A single row in the hotspot list showing name, vendor, and MAC address.
+/// Edit and delete buttons appear on hover.
 private struct HotspotRowView: View {
-    let hotspot  : HotspotConfig
-    let onEdit   : () -> Void
-    let onDelete : () -> Void
+    let hotspot: HotspotConfig
+    let onEdit: () -> Void
+    let onDelete: () -> Void
 
     @State private var isHovered = false
 
     var body: some View {
         HStack(alignment: .center, spacing: 14) {
-
-            // Icon badge
+            // Icon badge.
             ZStack {
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
                     .fill(Color.accentColor.opacity(0.12))
@@ -181,15 +193,16 @@ private struct HotspotRowView: View {
                     .foregroundStyle(Color.accentColor)
             }
 
-            // Labels
+            // Labels.
             VStack(alignment: .leading, spacing: 3) {
                 Text(hotspot.name)
                     .font(.system(size: 13, weight: .semibold))
+
                 HStack(spacing: 6) {
                     Text(hotspot.vendor.rawValue)
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    Text("·")
+                    Text("\u{00B7}")  // middle dot
                         .font(.caption)
                         .foregroundStyle(.tertiary)
                     Text(hotspot.macAddress)
@@ -201,7 +214,7 @@ private struct HotspotRowView: View {
 
             Spacer()
 
-            // Action buttons (shown on hover)
+            // Action buttons (visible on hover).
             if isHovered {
                 HStack(spacing: 4) {
                     IconButton(systemImage: "pencil", help: "Edit") { onEdit() }
@@ -222,11 +235,12 @@ private struct HotspotRowView: View {
 
 // MARK: - Icon button
 
+/// Small icon-only button with hover highlight, used for row actions.
 private struct IconButton: View {
-    let systemImage : String
-    var help        : String = ""
-    var tint        : Color  = .secondary
-    let action      : () -> Void
+    let systemImage: String
+    var help: String = ""
+    var tint: Color  = .secondary
+    let action: () -> Void
 
     @State private var isHovered = false
 
@@ -252,18 +266,20 @@ private struct IconButton: View {
 
 // MARK: - Add / Edit form
 
+/// Sheet form for creating or editing a hotspot configuration. Fields:
+/// name, BSSID, vendor, username, password, and an optional admin URL.
 struct HotspotFormView: View {
-    let existing  : HotspotConfig?
-    let onDismiss : () -> Void
+    let existing: HotspotConfig?
+    let onDismiss: () -> Void
 
     @ObservedObject private var store = ConfigStore.shared
 
-    @State private var name         : String = ""
-    @State private var macAddress   : String = ""
-    @State private var vendor       : RouterVendor = .netgear
-    @State private var username     : String = ""
-    @State private var password     : String = ""
-    @State private var customBaseURL: String = ""
+    @State private var name          = ""
+    @State private var macAddress    = ""
+    @State private var vendor        = RouterVendor.netgear
+    @State private var username      = ""
+    @State private var password      = ""
+    @State private var customBaseURL = ""
 
     private var isEditing: Bool { existing != nil }
 
@@ -272,7 +288,7 @@ struct HotspotFormView: View {
             Form {
                 Section("Identity") {
                     TextField("Name (e.g. My Hotspot)", text: $name)
-                    TextField("BSSID (aa:bb:cc:dd:ee:ff)",  text: $macAddress)
+                    TextField("BSSID (aa:bb:cc:dd:ee:ff)", text: $macAddress)
                         .fontDesign(.monospaced)
                     Picker("Vendor", selection: $vendor) {
                         ForEach(RouterVendor.allCases) { v in
@@ -306,7 +322,9 @@ struct HotspotFormView: View {
                     .onHover { inside in
                         if inside { NSCursor.pointingHand.push() } else { NSCursor.pop() }
                     }
+
                 Spacer()
+
                 Button(isEditing ? "Save" : "Add") {
                     commit()
                     onDismiss()
@@ -325,8 +343,10 @@ struct HotspotFormView: View {
 
     // MARK: - Helpers
 
+    /// Pre-fills the form fields when editing an existing hotspot.
     private func prefill() {
         guard let h = existing else { return }
+
         name          = h.name
         macAddress    = h.macAddress
         vendor        = h.vendor
@@ -335,8 +355,10 @@ struct HotspotFormView: View {
         customBaseURL = h.customBaseURL ?? ""
     }
 
+    /// Writes the form data to ConfigStore (add or update).
     private func commit() {
         let url = customBaseURL.trimmingCharacters(in: .whitespaces)
+
         if var h = existing {
             h.name          = name
             h.macAddress    = macAddress

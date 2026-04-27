@@ -1,9 +1,13 @@
-import AppKit
+// main.swift
+// DataHawk
+//
+// Application entry point. This is the only file where top-level executable
+// code is allowed. All further orchestration is driven by AppDelegate.
 
-// main.swift is the only file where top-level code is executed.
-// Everything else is driven from AppDelegate.
+import AppKit
 
 let app = NSApplication.shared
 let delegate = AppDelegate()
+
 app.delegate = delegate
 app.run()
