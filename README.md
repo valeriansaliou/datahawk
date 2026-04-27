@@ -1,0 +1,183 @@
+# DataHawk
+
+**DataHawk** is a lightweight macOS menu bar app that monitors your 5G mobile hotspot in real time. It sits quietly in the status bar and displays live cellular metrics — signal strength, data usage, battery level, and more — fetched directly from your router's admin API.
+
+Currently supports **NETGEAR Nighthawk** (M3, M6, M6 Pro).
+
+---
+
+## Features
+
+- **Auto-detection** — connects automatically when your Mac joins a known hotspot's WiFi network
+- **Live metrics** in the popover:
+  - Cellular generation (5G / 4G / 3G / 2G / 1G / No Signal)
+  - Signal strength (0–5 bars)
+  - Carrier name
+  - Connection status
+  - Roaming indicator
+  - Data used / Data limit / Data remaining
+  - Battery level and charging state
+  - WiFi network name and connected client count
+  - Firmware update notification
+- **Status bar icon** reflects the current state at a glance:
+  - Text badge (`5G`, `4G`, …) when connected
+  - Orange badge when data usage is high
+  - Red badge when battery is low
+  - Faded antenna when no hotspot is detected
+  - Faded cellular bars when signal is lost
+  - Blinking antenna while the first fetch is in progress
+- **WiFi QR share** — Option-click the icon (or use the QR button) to show a scannable QR code for joining the router's WiFi
+- **Auto-launch at login** via ServiceManagement
+- **Configurable refresh interval** (5 s – 1 h)
+- No Dock icon, no menubar clutter — pure status bar utility
+
+---
+
+## Requirements
+
+| | |
+|---|---|
+| **macOS** | 13.0 Ventura or later |
+| **Architecture** | Apple Silicon (arm64) or Intel (x86\_64) |
+| **Xcode CLI tools** | Required to build (`xcode-select --install`) |
+
+> **Location Services** — DataHawk requests "always" location permission on first launch. This is required by macOS 10.15+ before `CoreWLAN` will return the BSSID of the current access point, which is how the app identifies which hotspot is in range. No location data is ever stored or transmitted.
+
+---
+
+## Building
+
+```bash
+# Clone the repo
+git clone https://github.com/valeriansaliou/datahawk.git
+cd datahawk
+
+# Build the app bundle
+make
+
+# Build and launch immediately
+make all-dev
+
+# Clean build artefacts
+make clean
+```
+
+The build produces `.build/DataHawk.app`. You can move it to `/Applications` like any other app.
+
+### Code signing (optional)
+
+Pass your signing identity to skip the interactive prompt:
+
+```bash
+make SIGN_ID="Developer ID Application: Your Name (XXXXXXXXXX)"
+```
+
+Leave it empty to build without signing (works fine for local use).
+
+---
+
+## Setup
+
+1. Launch DataHawk — the antenna icon appears in the menu bar.
+2. Grant **Location Services** permission when prompted (needed for BSSID detection).
+3. Click the icon → **Settings** → **Hotspots** tab → **Add Hotspot**.
+4. Fill in the details for your router:
+
+| Field | Description |
+|---|---|
+| **Name** | A label you'll recognise, e.g. "Office M6 Pro" |
+| **BSSID** | The MAC address of the router's WiFi radio (shown in the disconnected view if unknown) |
+| **Vendor** | Router manufacturer (currently: NETGEAR) |
+| **Username** | Router admin username (default: `admin`) |
+| **Password** | Router admin password |
+| **Admin URL** *(optional)* | Override the auto-detected admin URL, e.g. `http://192.168.1.1` |
+
+5. Connect your Mac to that router's WiFi — DataHawk picks it up automatically.
+
+### Finding your BSSID
+
+The BSSID is the MAC address of the router's WiFi access point. When DataHawk is running but no hotspot is configured, the popover shows the **detected BSSID** of the current network with a copy button — paste it directly into the settings form.
+
+Alternatively, find it in **System Settings → Wi-Fi → Details → BSSID**.
+
+---
+
+## Usage
+
+| Action | Result |
+|---|---|
+| **Click** the icon | Open / close the metrics popover |
+| **Click ↻** in the popover | Soft refresh (reuses cached auth) |
+| **Option-click ↻** | Force full re-authentication + refresh |
+| **Option-click** the icon | Show WiFi QR code share sheet |
+| **Click QR button** | Show WiFi QR code share sheet |
+| **Click Settings** | Open the hotspot and options configuration window |
+
+---
+
+## Architecture
+
+DataHawk is built with **Swift** and Apple system frameworks only — no third-party dependencies.
+
+```
+Sources/
+├── main.swift                        # Entry point
+├── AppDelegate.swift                 # App lifecycle
+├── AppState.swift                    # Shared Combine observable state
+│
+├── Models/
+│   ├── RouterMetrics.swift           # Metrics value type
+│   └── HotspotConfig.swift           # Per-router configuration
+│
+├── Services/
+│   ├── ConfigStore.swift             # UserDefaults persistence
+│   ├── RouterService.swift           # Polling orchestrator
+│   ├── WiFiMonitor.swift             # NWPathMonitor + BSSID detection
+│   └── LocationPermissionManager.swift
+│
+├── Providers/
+│   ├── RouterProvider.swift          # Protocol + ProviderError
+│   └── Netgear/
+│       ├── NetgearProvider.swift     # Auth flow, cookie cache, HTTP
+│       └── NetgearMetricsParser.swift# model.json → RouterMetrics
+│
+└── UI/
+    ├── StatusBarController.swift     # NSStatusItem + NSPopover
+    ├── IconRenderer.swift            # Status bar icon generation
+    ├── PopoverView.swift             # Root view, header, footer
+    ├── PopoverSections.swift         # Content sections
+    ├── PopoverComponents.swift       # DataUsageBar, SignalBarsView
+    ├── SettingsView.swift            # Settings window (SwiftUI)
+    ├── SettingsWindowController.swift
+    └── WiFiQRWindowController.swift
+```
+
+Key patterns:
+
+- **MVVM-like with Combine** — `AppState` is the single source of truth; SwiftUI views observe it via `@ObservedObject`.
+- **Provider pattern** — `RouterProvider` protocol makes it straightforward to add support for new router vendors.
+- **Single-flight actor** — `FetchGate` prevents concurrent HTTP cycles from aborting each other.
+- **Cookie fast-path** — cached auth cookies are stored in UserDefaults so each routine refresh needs only one HTTP round-trip.
+
+---
+
+## Adding a new router vendor
+
+1. Add a case to `RouterVendor` in `Models/HotspotConfig.swift`.
+2. Create a new folder under `Sources/Providers/` and implement the `RouterProvider` protocol.
+3. Register the provider in `RouterService.providers`.
+4. (Optional) Add a default base URL in `RouterService.baseURL(for:)`.
+
+---
+
+## Limitations & known issues
+
+- **Credentials are stored in UserDefaults** (plain text). Keychain migration is planned before any public release.
+- BSSID detection requires Location Services permission. The app falls back to `ipconfig getsummary` if permission is denied, which works for most setups.
+- Only NETGEAR Nighthawk routers are supported today. The provider architecture makes it easy to add more.
+
+---
+
+## License
+
+MIT — see [LICENSE](LICENSE).
