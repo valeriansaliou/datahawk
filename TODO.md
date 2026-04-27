@@ -9,6 +9,10 @@
 - [ ] Publish releases
 - [ ] Automatic updates
 
+### Bugs
+
+- [ ] When showing popover from another macOS space, it switches back to origin space
+
 ### Tests
 
 - [ ] Test app in macOS light mode
