@@ -4,9 +4,6 @@ import Foundation
 
 enum RouterVendor: String, Codable, CaseIterable, Identifiable {
     case netgear = "NETGEAR"
-    case zte     = "ZTE"
-    case huawei  = "Huawei"
-    case other   = "Other"
 
     var id: String { rawValue }
 }

@@ -10,9 +10,14 @@ struct PopoverView: View {
         VStack(alignment: .leading, spacing: 0) {
             HeaderSection(state: state)
 
-            if state.fetchError != nil {
+            if state.metrics?.isHighDataUsage == true, let m = state.metrics {
                 Divider()
-                ErrorBannerSection()
+                HighDataUsageAlertSection(metrics: m)
+            }
+
+            if let error = state.fetchError {
+                Divider()
+                ErrorBannerSection(reason: error)
             }
 
             if state.connectionState == .disconnected {
@@ -33,8 +38,6 @@ struct PopoverView: View {
             FooterSection()
         }
         .frame(width: 280)
-        .background(Color(NSColor.windowBackgroundColor))
-        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 }
 
@@ -48,7 +51,10 @@ private struct HeaderSection: View {
         HStack(alignment: .center, spacing: 10) {
             Image(systemName: iconName)
                 .font(.system(size: 20))
-                .foregroundColor(state.connectionState == .disconnected ? .secondary : .primary)
+                .foregroundColor(
+                    (state.connectionState == .disconnected || state.connectionState == .failed)
+                        ? .secondary : .primary
+                )
                 .frame(width: 24)
 
             VStack(alignment: .leading, spacing: 5) {
@@ -76,7 +82,11 @@ private struct HeaderSection: View {
                         .frame(width: 13, height: 13)
                 } else {
                     Button {
-                        RouterService.shared.refresh()
+                        if NSEvent.modifierFlags.contains(.option) {
+                            RouterService.shared.forceFullRefresh()
+                        } else {
+                            RouterService.shared.refresh()
+                        }
                     } label: {
                         Image(systemName: "arrow.clockwise")
                             .font(.system(size: 11))
@@ -121,6 +131,10 @@ private struct HeaderSection: View {
                 .foregroundColor(.secondary)
         case .loading:
             Text("Acquiring…")
+                .font(.caption)
+                .foregroundColor(.secondary)
+        case .failed:
+            Text("Could not refresh")
                 .font(.caption)
                 .foregroundColor(.secondary)
         case .connected:
@@ -169,7 +183,7 @@ private struct HeaderSection: View {
     }
 
     private var iconName: String {
-        state.connectionState == .disconnected
+        (state.connectionState == .disconnected || state.connectionState == .failed)
             ? "antenna.radiowaves.left.and.right.slash"
             : "antenna.radiowaves.left.and.right"
     }
@@ -178,16 +192,25 @@ private struct HeaderSection: View {
 // MARK: - Error banner
 
 private struct ErrorBannerSection: View {
+    let reason: String
+
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(alignment: .top, spacing: 6) {
             Image(systemName: "exclamationmark.circle.fill")
                 .foregroundColor(.red)
                 .font(.caption)
-            Text("Could not refresh data")
-                .font(.caption)
-                .foregroundColor(.red)
+                .padding(.top, 1)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Could not refresh data")
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .foregroundColor(.red)
+                Text(reason)
+                    .font(.caption)
+                    .foregroundColor(.red.opacity(0.8))
+            }
         }
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
     }
@@ -267,6 +290,11 @@ private struct MetricsSection: View {
             VStack(alignment: .leading, spacing: 0) {
                 // Group 1: connection info
                 metricGroup {
+                    if let name = state.activeHotspot?.name {
+                        metricRow("Hotspot") {
+                            Text(name).fontDesign(.monospaced)
+                        }
+                    }
                     metricRow("Connection", isSpinner: m.connectionStatus.lowercased() != "connected") {
                         Text(m.connectionStatus).fontDesign(.monospaced)
                     }
@@ -280,7 +308,11 @@ private struct MetricsSection: View {
                 // Group 2: WiFi
                 metricGroup {
                     metricRow("WiFi network") {
-                        Text(state.detectedSSID ?? "—").fontDesign(.monospaced)
+                        if m.wifiEnabled {
+                            Text(state.detectedSSID ?? "—").fontDesign(.monospaced)
+                        } else {
+                            Text("OFF").fontDesign(.monospaced).foregroundColor(.secondary)
+                        }
                     }
                     metricRow("WiFi users") {
                         Text("\(m.connectedUsers)").fontDesign(.monospaced)
@@ -346,6 +378,34 @@ private struct MetricsSection: View {
     }
 }
 
+// MARK: - High data usage alert
+
+private struct HighDataUsageAlertSection: View {
+    let metrics: RouterMetrics
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "chart.bar.fill")
+                .foregroundColor(.orange)
+            Text(label)
+                .font(.subheadline)
+                .foregroundColor(.orange)
+            Spacer()
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(Color.orange.opacity(0.08))
+    }
+
+    private var label: String {
+        if let pct = metrics.dataUsagePercent {
+            let used = Int((pct * 100).rounded())
+            return "High data usage (\(used)% used)"
+        }
+        return "High data usage"
+    }
+}
+
 // MARK: - Firmware alert
 
 private struct FirmwareAlertSection: View {
@@ -370,15 +430,24 @@ private struct AdminButtonSection: View {
     @ObservedObject var state: AppState
 
     var body: some View {
-        Button(action: openAdminUI) {
-            HStack {
-                Image(systemName: "safari")
-                Text("Open Admin UI")
+        HStack(spacing: 8) {
+            Button(action: openAdminUI) {
+                HStack {
+                    Image(systemName: "safari")
+                    Text("Open Admin UI")
+                }
+                .frame(maxWidth: .infinity)
             }
-            .frame(maxWidth: .infinity)
+            .controlSize(.regular)
+            .disabled(state.metrics?.adminURL == nil)
+
+            Button(action: openWiFiQR) {
+                Image(systemName: "qrcode")
+            }
+            .controlSize(.regular)
+            .disabled(state.metrics?.wifiEnabled != true)
+            .help("Share WiFi via QR code")
         }
-        .controlSize(.regular)
-        .disabled(state.metrics?.adminURL == nil)
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
     }
@@ -389,6 +458,13 @@ private struct AdminButtonSection: View {
             let url    = URL(string: urlStr)
         else { return }
         NSWorkspace.shared.open(url)
+    }
+
+    private func openWiFiQR() {
+        guard let m = state.metrics, m.wifiEnabled,
+              let ssid = m.wifiSSID, let pass = m.wifiPassphrase
+        else { return }
+        WiFiQRWindowController.shared.show(ssid: ssid, passphrase: pass)
     }
 }
 

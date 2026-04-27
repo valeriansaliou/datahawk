@@ -5,7 +5,7 @@ APPNAME    := DataHawk
 BUNDLE_ID  := com.datahawk.app
 VERSION    := 0.1.0
 
-BUILD_DIR  := build
+BUILD_DIR  := .build
 APP_BUNDLE := $(BUILD_DIR)/$(APPNAME).app
 CONTENTS   := $(APP_BUNDLE)/Contents
 MACOS_DIR  := $(CONTENTS)/MacOS

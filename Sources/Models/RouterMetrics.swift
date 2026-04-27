@@ -30,10 +30,26 @@ struct RouterMetrics {
     var firmwareUpdateAvailable: Bool
     /// URL opened when the user taps "Open Admin UI"
     var adminURL              : String
+    /// Whether the router's WiFi radio is on
+    var wifiEnabled           : Bool
+    /// SSID broadcast by the router (nil when WiFi is off or unavailable)
+    var wifiSSID              : String?
+    /// WiFi passphrase (nil when unavailable)
+    var wifiPassphrase        : String?
+    /// Router-configured high-usage warning threshold (0–100 %).
+    /// nil when the API reports 0 or does not include the field.
+    var dataHighUsageWarningPct: Int?
 
     /// Returns 0.0–1.0 when both values are known, otherwise nil.
     var dataUsagePercent: Double? {
         guard let used = dataUsedGB, let limit = dataLimitGB, limit > 0 else { return nil }
         return min(used / limit, 1.0)
+    }
+
+    /// True when data used ≥ the router's high-usage warning threshold.
+    var isHighDataUsage: Bool {
+        guard let threshold = dataHighUsageWarningPct, threshold > 0,
+              let usedPct = dataUsagePercent else { return false }
+        return usedPct * 100 >= Double(threshold)
     }
 }

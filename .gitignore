@@ -2,7 +2,7 @@
 .DS_Store
 
 # Build resources
-build/
+.build/
 
 # Environment variables
 local.env

@@ -4,9 +4,9 @@ import AppKit
 /// All images are template images so they adapt automatically to
 /// light / dark mode and the highlighted (blue) menu bar state.
 enum IconRenderer {
-    static func icon(state: ConnectionState, networkType: NetworkType?, batteryLow: Bool = false) -> NSImage {
+    static func icon(state: ConnectionState, networkType: NetworkType?, batteryLow: Bool = false, highDataUsage: Bool = false) -> NSImage {
         switch state {
-        case .disconnected:
+        case .disconnected, .failed:
             let base   = tintedSFIcon("antenna.radiowaves.left.and.right", color: .white)
             let result = NSImage(size: base.size, flipped: false) { rect in
                 base.draw(in: rect, from: .zero, operation: .sourceOver, fraction: 0.35)
@@ -20,11 +20,13 @@ enum IconRenderer {
             let type = networkType ?? .unknown
             switch type {
             case .noSignal:
-                return sfSymbol("exclamationmark.transmission")
+                return highDataUsage
+                    ? tintedSFIcon("exclamationmark.transmission", color: .orange)
+                    : sfSymbol("exclamationmark.transmission")
             default:
-                return batteryLow
-                    ? textIcon(type.rawValue, color: .systemRed)
-                    : textIcon(type.rawValue)
+                if highDataUsage   { return textIcon(type.rawValue, color: .orange) }
+                if batteryLow      { return textIcon(type.rawValue, color: .systemRed) }
+                return textIcon(type.rawValue)
             }
         }
     }

@@ -11,37 +11,106 @@ import Foundation
 ///
 /// Fast path (subsequent refreshes):
 ///
-///   - Inject the cached auth cookie into a new session
+///   - Inject the cached auth cookie into a new session (3 s timeout)
 ///   - GET  /api/model.json  → full data model (one round-trip)
+///   - Up to 2 attempts; if both time out the router is likely not ready yet,
+///     so we wait 10 s before falling through to the full auth flow.
 ///   - If the response is missing `wwan.connection` (stale / expired cookie),
-///     discard the cache and retry with the full flow.
+///     discard the cache and fall through to full auth immediately.
 ///
 class NetgearProvider: RouterProvider {
 
-    /// In-memory auth cookie cache keyed by normalized base URL.
+    /// Auth cookie cache keyed by normalized base URL.
+    /// Loaded from disk on init and persisted after every update.
     private var cachedCookies: [String: [HTTPCookie]] = [:]
+
+    private let cookiesDefaultsKey = "netgear_cookies_v1"
+
+    init() {
+        cachedCookies = Self.loadCookies(forKey: cookiesDefaultsKey)
+    }
+
+    // MARK: - Cookie persistence
+
+    /// Serialises the cache to UserDefaults.
+    private func persistCookies() {
+        let serialized: [String: [[String: Any]]] = cachedCookies.mapValues { cookies in
+            cookies.compactMap { cookie -> [String: Any]? in
+                guard let props = cookie.properties else { return nil }
+                // Only keep plist-safe value types; convert URL → String.
+                var dict: [String: Any] = [:]
+                for (key, val) in props {
+                    switch val {
+                    case let s as String:   dict[key.rawValue] = s
+                    case let d as Date:     dict[key.rawValue] = d
+                    case let n as NSNumber: dict[key.rawValue] = n
+                    case let u as URL:      dict[key.rawValue] = u.absoluteString
+                    default: break
+                    }
+                }
+                return dict.isEmpty ? nil : dict
+            }
+        }
+        UserDefaults.standard.set(serialized, forKey: cookiesDefaultsKey)
+    }
+
+    /// Deserialises the cache from UserDefaults.
+    private static func loadCookies(forKey key: String) -> [String: [HTTPCookie]] {
+        guard let raw = UserDefaults.standard.dictionary(forKey: key)
+                        as? [String: [[String: Any]]] else { return [:] }
+        return raw.compactMapValues { dicts in
+            let cookies = dicts.compactMap { dict -> HTTPCookie? in
+                let props = Dictionary(
+                    uniqueKeysWithValues: dict.map { (HTTPCookiePropertyKey($0.key), $0.value) }
+                )
+                return HTTPCookie(properties: props)
+            }
+            return cookies.isEmpty ? nil : cookies
+        }
+    }
+
+    func flushAuth() {
+        cachedCookies = [:]
+        UserDefaults.standard.removeObject(forKey: cookiesDefaultsKey)
+    }
 
     func fetchMetrics(config: HotspotConfig, baseURL: String) async throws -> RouterMetrics {
         let base = normalizedBase(baseURL)
 
-        // Fast path — skip auth when we have a cached cookie.
+        // Fast path — cached cookie, short timeout, up to 2 attempts.
         if let cookies = cachedCookies[base] {
-            if let model = try? await fetchModelWithCookies(cookies, base: base),
-               isAuthenticated(model) {
-                return extractMetrics(from: model, baseURL: base)
+            var timedOutOnAll = false
+            for attempt in 1...2 {
+                do {
+                    let model = try await fetchModelWithCookies(cookies, base: base, requestTimeout: 5)
+                    if isAuthenticated(model) {
+                        return extractMetrics(from: model, baseURL: base)
+                    }
+                    // Valid response but unauthenticated — stale cookie, go to full auth now.
+                    break
+                } catch let urlErr as URLError where urlErr.code == .timedOut {
+                    if attempt < 2 { continue }
+                    timedOutOnAll = true
+                } catch {
+                    break  // other network error — fall through to full auth
+                }
             }
-            // Cookie stale or rejected — clear and fall through to full auth.
-            cachedCookies[base] = nil
+            cachedCookies[base] = nil; persistCookies()
+            if timedOutOnAll {
+                // Router not yet reachable (e.g. just switched networks).
+                // Wait before the heavier full-auth flow.
+                try await Task.sleep(nanoseconds: 10 * 1_000_000_000)
+            }
         }
 
-        // Full auth flow.
+        // Full auth flow (standard timeouts).
         let session = makeFreshSession()
 
         try await fetchRaw(session, "\(base)/sess_cd_tmp")
 
         let pubModel = try await fetchJSON(session, "\(base)/api/model.json")
         guard let secToken = string(pubModel, "session.secToken"), !secToken.isEmpty else {
-            throw ProviderError("Could not read secToken from /api/model.json")
+            throw ProviderError("Router returned an unexpected response")
         }
 
         try await login(session, baseURL: base, secToken: secToken, password: config.password)
@@ -51,14 +120,19 @@ class NetgearProvider: RouterProvider {
         // Cache the auth cookies for the next refresh.
         if let url = URL(string: base) {
             cachedCookies[base] = session.configuration.httpCookieStorage?.cookies(for: url) ?? []
+            persistCookies()
         }
 
         return extractMetrics(from: model, baseURL: base)
     }
 
     /// Fetches /api/model.json with pre-seeded cookies, without going through auth.
-    private func fetchModelWithCookies(_ cookies: [HTTPCookie], base: String) async throws -> [String: Any] {
-        let session = makeFreshSession()
+    private func fetchModelWithCookies(
+        _ cookies: [HTTPCookie],
+        base: String,
+        requestTimeout: TimeInterval = 8
+    ) async throws -> [String: Any] {
+        let session = makeFreshSession(requestTimeout: requestTimeout)
         if let storage = session.configuration.httpCookieStorage,
            let url = URL(string: base) {
             for cookie in cookies { storage.setCookie(cookie) }
@@ -99,30 +173,30 @@ class NetgearProvider: RouterProvider {
 
     // MARK: - Session factory
 
-    private func makeFreshSession() -> URLSession {
+    private func makeFreshSession(requestTimeout: TimeInterval = 8) -> URLSession {
         let cfg = URLSessionConfiguration.ephemeral
-        cfg.httpCookieAcceptPolicy     = .always   // store Set-Cookie from every response
-        cfg.httpShouldSetCookies       = true       // send stored cookies on every request
-        cfg.timeoutIntervalForRequest  = 8
-        cfg.timeoutIntervalForResource = 12
+        cfg.httpCookieAcceptPolicy     = .always
+        cfg.httpShouldSetCookies       = true
+        cfg.timeoutIntervalForRequest  = requestTimeout
+        cfg.timeoutIntervalForResource = max(requestTimeout + 4, 12)
         return URLSession(configuration: cfg)
     }
 
     // MARK: - HTTP primitives
 
     private func fetchJSON(_ session: URLSession, _ rawURL: String) async throws -> [String: Any] {
-        guard let url = URL(string: rawURL) else { throw ProviderError("Malformed URL: \(rawURL)") }
+        guard let url = URL(string: rawURL) else { throw ProviderError("Invalid router URL — check Settings") }
         var req = URLRequest(url: url)
         req.setValue("application/json", forHTTPHeaderField: "Accept")
         let (data, _) = try await session.data(for: req)
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            throw ProviderError("Expected JSON from \(rawURL)")
+            throw ProviderError("Router returned an unexpected response")
         }
         return json
     }
 
     private func fetchRaw(_ session: URLSession, _ rawURL: String) async throws {
-        guard let url = URL(string: rawURL) else { throw ProviderError("Malformed URL: \(rawURL)") }
+        guard let url = URL(string: rawURL) else { throw ProviderError("Invalid router URL — check Settings") }
         _ = try await session.data(from: url)
     }
 
@@ -133,32 +207,27 @@ class NetgearProvider: RouterProvider {
         password  : String
     ) async throws {
         guard let url = URL(string: "\(baseURL)/Forms/config") else {
-            throw ProviderError("Malformed base URL: \(baseURL)")
+            throw ProviderError("Invalid router URL — check Settings")
         }
 
         // application/x-www-form-urlencoded body
         let body: String = [
             ("token",            secToken),
-            ("err_redirect",     "/index.html?loginfailed"),
-            ("ok_redirect",      "/index.html"),
             ("session.password", password),
         ]
         .map { key, val in "\(key)=\(formEncode(val))" }
         .joined(separator: "&")
 
         var req = URLRequest(url: url)
-        req.httpMethod = "POST"
+        req.httpMethod       = "POST"
+        req.timeoutInterval  = 60   // /Forms/config can be very slow on NETGEAR hardware
         req.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
-        req.httpBody   = body.data(using: .utf8)
+        req.httpBody         = body.data(using: .utf8)
 
-        // URLSession follows the 302 redirect automatically.
-        // After the redirect the ephemeral cookie storage holds the
-        // authenticated sessionId, overwriting the anonymous one.
         let (_, response) = try await session.data(for: req)
 
-        // The redirect target tells us whether login succeeded.
-        let finalURL = (response as? HTTPURLResponse)?.url?.absoluteString ?? ""
-        if finalURL.contains("loginfailed") {
+        let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+        if statusCode < 200 || statusCode >= 300 {
             throw ProviderError("NETGEAR login failed — check username / password in Settings")
         }
     }
@@ -195,8 +264,14 @@ class NetgearProvider: RouterProvider {
             "wwan.registerNetworkDisplay"
         ) ?? "Unknown"
 
+        // ── Roaming ───────────────────────────────────────────────────────
+        // roamingType == "Home" means not roaming; anything else means roaming.
+        // Resolved early because parseDataUsage needs it to pick the right limit flag.
+        let roamingType = string(model, "wwan.roamingType") ?? "Home"
+        let isRoaming = roamingType.caseInsensitiveCompare("Home") != .orderedSame
+
         // ── Data usage ───────────────────────────────────────────────────
-        let (dataUsedGB, dataLimitGB) = parseDataUsage(model)
+        let (dataUsedGB, dataLimitGB, dataHighUsageWarningPct) = parseDataUsage(model, isRoaming: isRoaming)
 
         // ── Battery ──────────────────────────────────────────────────────
         // batteryState == "NoBattery"  → device has no battery (e.g. plugged via USB-C only)
@@ -222,11 +297,6 @@ class NetgearProvider: RouterProvider {
         // ── Connection status ─────────────────────────────────────────────
         let connectionStatus = string(model, "wwan.connection") ?? "Unknown"
 
-        // ── Roaming ───────────────────────────────────────────────────────
-        // roamingType == "Home" means not roaming; anything else means roaming.
-        let roamingType = string(model, "wwan.roamingType") ?? "Home"
-        let isRoaming = roamingType.caseInsensitiveCompare("Home") != .orderedSame
-
         // ── Firmware update ───────────────────────────────────────────────
         // general.newFirmware is "1" or true when an update is available.
         let fwRaw = nested(model, "general.newFirmware")
@@ -251,7 +321,11 @@ class NetgearProvider: RouterProvider {
             connectedUsers:           connectedUsers,
             isRoaming:                isRoaming,
             firmwareUpdateAvailable:  firmwareUpdateAvailable,
-            adminURL:                 baseURL
+            adminURL:                 baseURL,
+            wifiEnabled:              bool(model, "wifi.enabled") ?? false,
+            wifiSSID:                 string(model, "wifi.SSID"),
+            wifiPassphrase:           string(model, "wifi.passPhrase"),
+            dataHighUsageWarningPct:  dataHighUsageWarningPct
         )
     }
 
@@ -275,19 +349,31 @@ class NetgearProvider: RouterProvider {
 
     // MARK: - Data-usage parser
 
-    private func parseDataUsage(_ model: [String: Any]) -> (used: Double?, limit: Double?) {
+    private func parseDataUsage(
+        _ model: [String: Any],
+        isRoaming: Bool
+    ) -> (used: Double?, limit: Double?, highUsageWarningPct: Int?) {
         // Primary: billing-cycle counters under wwan.dataUsage.generic (bytes).
         // These reset with the billing period so they're the most useful.
         if let generic = nested(model, "wwan.dataUsage.generic") as? [String: Any] {
             if let usedBytes = doubleValue(generic["dataTransferred"]) {
                 let usedGB  = usedBytes / 1_073_741_824
                 var limitGB : Double? = nil
-                let limitEnabled = (generic["billingCycleLimitEnabled"] as? Bool) ?? false
+
+                // When roaming, the router enforces the roaming cap; otherwise
+                // use the standard billing-cycle limit flag.
+                let limitFlagKey = isRoaming ? "billingCycleLimitRoaming" : "billingCycleLimitEnabled"
+                let limitEnabled = (generic[limitFlagKey] as? Bool) ?? false
                 let limitValid   = (generic["dataLimitValid"] as? Bool) ?? false
                 if limitEnabled && limitValid, let lb = doubleValue(generic["billingCycleLimit"]) {
                     limitGB = lb / 1_073_741_824
                 }
-                return (usedGB, limitGB)
+
+                // usageHighWarning is 0–100; treat 0 as "not configured".
+                let rawWarning = Int(doubleValue(generic["usageHighWarning"]) ?? 0)
+                let highUsageWarningPct: Int? = rawWarning > 0 ? rawWarning : nil
+
+                return (usedGB, limitGB, highUsageWarningPct)
             }
         }
 
@@ -296,15 +382,15 @@ class NetgearProvider: RouterProvider {
         if let xf = nested(model, "wwan.dataTransferred") as? [String: Any] {
             let total = stringToDouble(xf["totalb"])
             if let total {
-                return (total / 1_073_741_824, nil)
+                return (total / 1_073_741_824, nil, nil)
             }
             // Derive total from rx + tx if totalb is absent.
             if let rx = stringToDouble(xf["rxb"]), let tx = stringToDouble(xf["txb"]) {
-                return ((rx + tx) / 1_073_741_824, nil)
+                return ((rx + tx) / 1_073_741_824, nil, nil)
             }
         }
 
-        return (nil, nil)
+        return (nil, nil, nil)
     }
 
     // MARK: - JSON path helpers

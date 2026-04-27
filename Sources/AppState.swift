@@ -5,7 +5,8 @@ import Combine
 
 enum ConnectionState: Equatable {
     case disconnected   // No WiFi or BSSID not in whitelist
-    case loading        // Known hotspot; fetching first metrics
+    case loading        // Known hotspot; actively fetching first metrics
+    case failed         // Known hotspot; initial fetch failed, no metrics yet
     case connected      // Metrics available
 }
 

@@ -2,25 +2,12 @@ import AppKit
 import SwiftUI
 import Combine
 
-/// NSPanel subclass that can become key and swallows ESC.
-private class KeyablePanel: NSPanel {
-    var onEscape: (() -> Void)?
-    override var canBecomeKey: Bool { true }
-    override func keyDown(with event: NSEvent) {
-        if event.keyCode == 53 { onEscape?() } else { super.keyDown(with: event) }
-    }
-}
-
-/// Owns the NSStatusItem and the drop-down panel.
-/// We use a manually-positioned NSPanel instead of NSPopover so that we have
-/// precise control over the vertical offset — NSPopover's window repositioning
-/// (triggered by makeKey / size negotiation) caused a large gap on some setups.
-class StatusBarController {
-    private var statusItem   : NSStatusItem!
-    private var panel        : KeyablePanel?
-    private var panelVC      : NSHostingController<PopoverView>?
-    private var sizingObserver: NSKeyValueObservation?
-    private var clickMonitor : Any?
+/// Owns the NSStatusItem and the drop-down popover.
+class StatusBarController: NSObject, NSPopoverDelegate {
+    private var statusItem    : NSStatusItem!
+    private var popover       : NSPopover!
+    private var clickMonitor       : Any?
+    private var frameObserver      : NSKeyValueObservation?
 
     private let wifiMonitor  = WiFiMonitor()
     private var cancellables = Set<AnyCancellable>()
@@ -31,7 +18,7 @@ class StatusBarController {
 
     func start() {
         setupStatusItem()
-        setupPanel()
+        setupPopover()
         setupStateObserver()
         setupWiFiMonitor()
         checkConnection()
@@ -40,7 +27,6 @@ class StatusBarController {
     func stop() {
         wifiMonitor.stop()
         RouterService.shared.stop()
-        sizingObserver?.invalidate()
         blinkTimer?.invalidate()
     }
 
@@ -55,123 +41,125 @@ class StatusBarController {
         button.sendAction(on: [.leftMouseUp, .rightMouseUp])
     }
 
-    // MARK: - Panel
+    // MARK: - Popover
 
-    private func setupPanel() {
-        let vc = NSHostingController(rootView: PopoverView())
-
-        let win = KeyablePanel(
-            contentRect : NSRect(x: 0, y: 0, width: 280, height: 320),
-            styleMask   : [.borderless, .nonactivatingPanel],
-            backing     : .buffered,
-            defer       : false
-        )
-        win.onEscape = { [weak self] in self?.hidePanel() }
-        win.contentViewController = vc
-        win.isOpaque              = false
-        win.backgroundColor       = .clear
-        win.hasShadow             = true
-        win.level                 = .popUpMenu
-        win.collectionBehavior    = [.canJoinAllSpaces, .fullScreenAuxiliary]
-
-        // Track SwiftUI's preferred size and resize the panel to match.
-        sizingObserver = vc.observe(\.preferredContentSize, options: [.new]) { [weak win] _, change in
-            guard let size = change.newValue, size.width > 0, size.height > 0 else { return }
-            DispatchQueue.main.async { win?.setContentSize(size) }
-        }
-
-        panelVC = vc
-        panel   = win
+    private func setupPopover() {
+        popover = NSPopover()
+        popover.contentViewController = NSHostingController(rootView: PopoverView())
+        popover.behavior              = .applicationDefined
+        popover.animates              = false
+        popover.delegate              = self
     }
 
-    private func showPanel() {
+    private func showPopover() {
         guard
-            let panel        = panel,
             let button       = statusItem.button,
             let buttonWindow = button.window
         else { return }
 
-        // Determine panel size — use SwiftUI's ideal size when available,
-        // fall back to a sensible default for the very first display.
-        let preferred = panelVC?.preferredContentSize ?? .zero
-        let size = (preferred.width > 0 && preferred.height > 0)
-            ? preferred
-            : NSSize(width: 280, height: 320)
+        // Show at a temporary anchor — NSPopover positions incorrectly for
+        // status items due to the flipped coordinate space of NSStatusBarButton.
+        // We grab its window right after and reposition using the same math
+        // that works reliably for manual panel placement.
+        popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
 
-        panel.setContentSize(size)
+        // Reposition before the first render cycle.
+        if let popoverWindow = popover.contentViewController?.view.window {
+            let buttonOnScreen = buttonWindow.convertToScreen(
+                button.convert(button.bounds, to: nil)
+            )
+            // NSPopover computes X correctly (arrow points to button), but Y is
+            // wrong due to the flipped coordinate space. Keep NSPopover's X and
+            // only fix Y to sit just below the button.
+            let anchorX = popoverWindow.frame.origin.x
+            let anchorTop = (buttonOnScreen.minY - 5).rounded()   // top edge, stays fixed
+            let y = (anchorTop - popoverWindow.frame.height).rounded()
+            popoverWindow.setFrameOrigin(NSPoint(x: anchorX, y: y))
 
-        // Convert the button's bounds to screen coordinates.
-        let buttonOnScreen = buttonWindow.convertToScreen(
-            button.convert(button.bounds, to: nil)
-        )
+            // Whenever NSPopover resizes the window (content height changes during
+            // loading), it recalculates position using its wrong anchor and jumps.
+            // Re-lock Y after every frame change, keeping the top edge fixed so
+            // the arrow always points to the button.
+            frameObserver = popoverWindow.observe(\.frame, options: [.new]) { [anchorX, anchorTop] win, change in
+                guard let newFrame = change.newValue else { return }
+                let expectedY = (anchorTop - newFrame.height).rounded()
+                if abs(newFrame.origin.y - expectedY) > 0.5 {
+                    win.setFrameOrigin(NSPoint(x: anchorX, y: expectedY))
+                }
+            }
 
-        // Centre the panel below the button, with a small gap below the menu bar.
-        let x = (buttonOnScreen.midX - size.width / 2).rounded()
-        let y = (buttonOnScreen.minY  - size.height - 5).rounded()
+            // Auto-focus so keyboard events (and ESC) work without clicking first.
+            NSApp.activate(ignoringOtherApps: true)
+            popoverWindow.makeKey()
+        }
 
-        panel.setFrameOrigin(NSPoint(x: x, y: y))
-        // Activate the app so key events (ESC) are routed to our panel.
-        // .accessory activation policy means no Dock icon appears.
-        NSApp.activate(ignoringOtherApps: true)
-        panel.makeKeyAndOrderFront(nil)
-        // Show the active background on the status item (like WiFi / Bluetooth menus).
-        // Deferred one run-loop tick so AppKit's own mouse-up reset fires first.
         DispatchQueue.main.async { self.statusItem.button?.highlight(true) }
 
-        // Dismiss when the user clicks anywhere outside the panel.
+        // Global monitor catches clicks on system UI (other tray icons, Dock, etc.)
+        // that NSPopover's .transient behavior misses because they run in a
+        // separate process (SystemUIServer).
         clickMonitor = NSEvent.addGlobalMonitorForEvents(
             matching: [.leftMouseDown, .rightMouseDown]
-        ) { [weak self] _ in
-            self?.hidePanel()
-        }
+        ) { [weak self] _ in self?.hidePopover() }
     }
 
-    private func hidePanel() {
-        panel?.orderOut(nil)
+    private func hidePopover() {
+        popover.performClose(nil)
         if let m = clickMonitor { NSEvent.removeMonitor(m); clickMonitor = nil }
-        statusItem.button?.highlight(false)
     }
 
-    private var isPanelVisible: Bool { panel?.isVisible ?? false }
+    private var isPopoverVisible: Bool { popover.isShown }
+
+    func popoverDidClose(_ notification: Notification) {
+        statusItem.button?.highlight(false)
+        if let m = clickMonitor { NSEvent.removeMonitor(m); clickMonitor = nil }
+        frameObserver?.invalidate(); frameObserver = nil
+    }
 
     // MARK: - State observer (icon updates)
 
     private func setupStateObserver() {
-        Publishers.CombineLatest3(
-            AppState.shared.$connectionState,
-            AppState.shared.$metrics.map { $0?.networkType },
-            AppState.shared.$metrics.map { m -> Bool in
-                guard let m, !m.isPluggedIn, let pct = m.batteryPercent else { return false }
-                return pct < m.batteryLowThreshold
-            }
+        Publishers.CombineLatest(
+            Publishers.CombineLatest3(
+                AppState.shared.$connectionState,
+                AppState.shared.$metrics.map { $0?.networkType },
+                AppState.shared.$metrics.map { m -> Bool in
+                    guard let m, !m.isPluggedIn, let pct = m.batteryPercent else { return false }
+                    return pct < m.batteryLowThreshold
+                }
+            ),
+            AppState.shared.$metrics.map { $0?.isHighDataUsage == true }
         )
         .receive(on: DispatchQueue.main)
-        .sink { [weak self] state, networkType, batteryLow in
-            self?.applyIcon(state: state, networkType: networkType, batteryLow: batteryLow)
+        .sink { [weak self] tuple, highDataUsage in
+            let (state, networkType, batteryLow) = tuple
+            self?.applyIcon(state: state, networkType: networkType, batteryLow: batteryLow, highDataUsage: highDataUsage)
         }
         .store(in: &cancellables)
     }
 
-    private func applyIcon(state: ConnectionState, networkType: NetworkType?, batteryLow: Bool) {
+    private func applyIcon(state: ConnectionState, networkType: NetworkType?, batteryLow: Bool, highDataUsage: Bool) {
         switch state {
         case .loading:
             guard blinkTimer == nil else { return }
             blinkPhase = 0
             statusItem.button?.image = IconRenderer.loadingIcon()
-            // 10 FPS, full sine cycle in ~1.4 s
             let ticksPerCycle: CGFloat = 14
             blinkTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
                 guard let self else { return }
                 self.blinkPhase += (2 * .pi) / ticksPerCycle
-                // Oscillate between 0.25 and 1.0
-                let t     = (sin(self.blinkPhase) + 1) / 2   // 0 → 1
+                let t     = (sin(self.blinkPhase) + 1) / 2
                 let alpha = 0.4 + t * 0.6
                 self.statusItem.button?.image = IconRenderer.loadingIcon(alpha: alpha)
             }
-        default:
+        case .failed:
             blinkTimer?.invalidate()
             blinkTimer = nil
-            statusItem.button?.image = IconRenderer.icon(state: state, networkType: networkType, batteryLow: batteryLow)
+            statusItem.button?.image = IconRenderer.icon(state: .disconnected, networkType: nil)
+        case .disconnected, .connected:
+            blinkTimer?.invalidate()
+            blinkTimer = nil
+            statusItem.button?.image = IconRenderer.icon(state: state, networkType: networkType, batteryLow: batteryLow, highDataUsage: highDataUsage)
         }
     }
 
@@ -220,11 +208,11 @@ class StatusBarController {
     // MARK: - Click handler
 
     @objc private func handleClick(_ sender: Any?) {
-        if isPanelVisible {
-            hidePanel()
+        if isPopoverVisible {
+            hidePopover()
         } else {
             checkConnection()
-            showPanel()
+            showPopover()
         }
     }
 }
