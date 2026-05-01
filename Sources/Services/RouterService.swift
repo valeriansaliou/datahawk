@@ -226,7 +226,7 @@ class RouterService {
                  .cannotConnectToHost,
                  .dnsLookupFailed:             return "Router unreachable"
             case .networkConnectionLost:       return "Network connection lost"
-            case .notConnectedToInternet:      return "No internet connection"
+            case .notConnectedToInternet:      return "No network connection"
             case .userAuthenticationRequired:  return "Authentication required"
             case .badServerResponse:           return "Unexpected response from router"
             default:                           return "Network error (\(urlError.code.rawValue))"
