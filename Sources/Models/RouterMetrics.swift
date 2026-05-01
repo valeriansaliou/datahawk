@@ -31,6 +31,9 @@ struct RouterMetrics {
     /// Whether the device is currently roaming (i.e. not on the home network).
     var isRoaming: Bool
 
+    /// Whether the SIM card is locked (e.g. PIN required).
+    var isSimLocked: Bool
+
     // MARK: - Data usage
 
     /// Bytes consumed in the current billing period, converted to GB.

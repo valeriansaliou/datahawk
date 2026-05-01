@@ -16,14 +16,20 @@
 
 ### Tests
 
-- [ ] Test app in macOS light mode
-- [ ] Test power states with battery inserted
-- [ ] Test all variations of NETGEAR settings
-  - [ ] 3G + 4G technologies
-  - [ ] No data limit
-  - [ ] SIM card is locked
-  - [ ] WiFi is off
-  - [ ] APN is not connected
+- [x] Test app in macOS light mode
+- [x] Lower connecting spinner size
+- [x] Fix "—" in signal icon
+- [x] Test power states with battery inserted
+- [x] Test all variations of NETGEAR settings
+  - [x] 3G + 4G technologies
+  - [x] No service
+  - [x] Connecting, Disconnected, Connected
+  - [x] Data limit reached
+  - [x] No data limit
+  - [x] Battery low
+  - [x] WiFi is off
+  - [x] SIM card is locked
+  - [x] APN is not connected
 - [ ] (..)
 
 ### Others

@@ -127,19 +127,25 @@ struct HeaderSection: View {
     @ViewBuilder
     private var titleText: some View {
         if state.connectionState == .connected, let m = state.metrics {
-            HStack(spacing: 8) {
-                Text(m.provider)
+            if m.isSimLocked {
+                Text("SIM Locked")
                     .font(.headline)
+                    .foregroundColor(.orange)
+            } else {
+                HStack(spacing: 8) {
+                    Text(m.provider)
+                        .font(.headline)
 
-                // Network generation pill (e.g. "5G", "4G").
-                Text(m.networkType.rawValue)
-                    .font(.caption)
-                    .fontWeight(.bold)
-                    .foregroundColor(colorScheme == .dark ? .black : .white)
-                    .padding(.horizontal, 4)
-                    .padding(.vertical, 1)
-                    .background(colorScheme == .dark ? Color.white : Color.black)
-                    .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+                    // Network generation pill (e.g. "5G", "4G").
+                    Text(m.networkType.rawValue)
+                        .font(.caption)
+                        .fontWeight(.bold)
+                        .foregroundColor(colorScheme == .dark ? .black : .white)
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 1)
+                        .background(colorScheme == .dark ? Color.white : Color.black)
+                        .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+                }
             }
         } else {
             Text("DataHawk")

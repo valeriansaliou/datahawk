@@ -97,12 +97,17 @@ class RouterService {
             await fetchAndPublish(config: config)
 
             while !Task.isCancelled {
-                // Use a shorter interval after a failure so recovery is fast.
-                let isFailed = await MainActor.run {
-                    AppState.shared.connectionState == .failed
+                // Use a shorter interval when the fetch failed or when the
+                // router's cellular connection is not yet "Connected", so
+                // the UI catches the transition to connected quickly.
+                let useRetryInterval = await MainActor.run {
+                    let state = AppState.shared.connectionState
+                    let routerConnected =
+                        AppState.shared.metrics?.connectionStatus.lowercased() == "connected"
+                    return state == .failed || (state == .connected && !routerConnected)
                 }
 
-                let interval = isFailed ? retryInterval : pollInterval
+                let interval = useRetryInterval ? retryInterval : pollInterval
 
                 try? await Task.sleep(for: .seconds(interval))
 

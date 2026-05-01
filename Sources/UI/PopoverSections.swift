@@ -135,7 +135,7 @@ struct MetricsSection: View {
 
                     metricRow(
                         "Connection",
-                        isSpinner: m.connectionStatus.lowercased() != "connected"
+                        isSpinner: m.connectionStatus.lowercased() == "connecting"
                     ) {
                         Text(m.connectionStatus).fontDesign(.monospaced)
                     }

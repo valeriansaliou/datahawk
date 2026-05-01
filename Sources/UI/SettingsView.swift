@@ -175,7 +175,7 @@ private struct OptionsTab: View {
             } header: {
                 Text("Data refresh")
             } footer: {
-                Text("How often DataHawk fetches metrics from your router. Minimum 5 seconds.")
+                Text("How often DataHawk fetches metrics from your router when it is in connected state. Minimum 5 seconds.")
                     .font(.caption)
                     .foregroundColor(.secondary)
             }

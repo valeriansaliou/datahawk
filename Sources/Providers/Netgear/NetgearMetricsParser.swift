@@ -51,6 +51,10 @@ extension NetgearProvider {
         let roamingType = stringValue(model, "wwan.roamingType") ?? "Home"
         let isRoaming   = roamingType.caseInsensitiveCompare("Home") != .orderedSame
 
+        // -- SIM lock ---------------------------------------------------------
+        let simStatus   = stringValue(model, "sim.status") ?? ""
+        let isSimLocked = simStatus.caseInsensitiveCompare("Locked") == .orderedSame
+
         // -- Data usage -------------------------------------------------------
         let (dataUsedGB, dataLimitGB, dataHighUsageWarningPct) =
             parseDataUsage(model, isRoaming: isRoaming)
@@ -103,6 +107,7 @@ extension NetgearProvider {
             signalStrength:           min(max(bars, 0), 5),
             provider:                 provider,
             isRoaming:                isRoaming,
+            isSimLocked:              isSimLocked,
             dataUsedGB:               dataUsedGB,
             dataLimitGB:              dataLimitGB,
             dataHighUsageWarningPct:  dataHighUsageWarningPct,

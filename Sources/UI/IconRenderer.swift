@@ -27,12 +27,14 @@ enum IconRenderer {
     ///   - batteryLow:         When `true` the badge is rendered in red.
     ///   - highDataUsage:      When `true` the badge is rendered in orange.
     ///   - routerNotConnected: When `true` the text badge is rendered at 35 % opacity.
+    ///   - simLocked:          When `true` an orange SIM card icon is shown.
     static func icon(
         state: ConnectionState,
         networkType: NetworkType?,
         batteryLow: Bool = false,
         highDataUsage: Bool = false,
-        routerNotConnected: Bool = false
+        routerNotConnected: Bool = false,
+        simLocked: Bool = false
     ) -> NSImage {
         switch state {
         case .noHotspot:
@@ -53,6 +55,8 @@ enum IconRenderer {
             return sfSymbol("antenna.radiowaves.left.and.right")
 
         case .connected:
+            if simLocked { return tintedSFIcon("simcard", color: .orange) }
+
             let type = networkType ?? .unknown
 
             switch type {
