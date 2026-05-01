@@ -1,12 +1,16 @@
 # DataHawk
 
-**DataHawk** is a lightweight macOS menu bar app that monitors your 5G mobile hotspot in real time. It sits quietly in the status bar and displays live cellular metrics — signal strength, data usage, battery level, and more — fetched directly from your router's admin API.
+**DataHawk** is a lightweight macOS menu bar app that monitors your 5G mobile hotspot in real time.
 
-✅ Supported hotspots:
+It sits quietly in the status bar and displays live cellular metrics — signal strength, data usage, battery level, and more — fetched directly from your router's admin API. There's no Dock icon — _DataHawk is a pure status bar utility_.
 
-- **NETGEAR**
-  - **Nighthawk** (M3, M6, M6 Pro).
-- _Want to add a hotspot vendor? We accept PRs!_
+⬇️ **[Download DataHawk for macOS](https://github.com/valeriansaliou/datahawk/releases/latest/download/DataHawk.dmg)**
+
+📶 **Supported hotspots:**
+
+- NETGEAR
+  - Nighthawk (M3, M6, M6 Pro).
+- _💡 Want to [add a hotspot vendor](./Sources/Providers)? We accept PRs!_
 
 ## Screenshots
 
@@ -14,8 +18,8 @@
 
 ## Features
 
-- **Auto-detection** — connects automatically when your Mac joins a known hotspot's WiFi network
-- **Live metrics** in the popover:
+- ✅ **Hotspot auto-detection** — connects automatically when your Mac joins a known hotspot's WiFi network
+- ✅ **Live cellular metrics** in the popover:
   - Cellular generation (5G / 4G / 3G / 2G / 1G / No Signal)
   - Signal strength (0–5 bars)
   - Carrier name
@@ -25,18 +29,52 @@
   - Battery level and charging state
   - WiFi network name and connected client count
   - Firmware update notification
-- **Status bar icon** reflects the current state at a glance:
+- ✅ **Status bar icon** reflects the current state at a glance:
   - Text badge (`5G`, `4G`, …) when connected
   - Orange badge when data usage is high
   - Red badge when battery is low
   - Faded antenna when no hotspot is detected
   - Faded cellular bars when signal is lost
-  - Blinking antenna while the first fetch is in progress
-- **WiFi QR share** — Option-click the icon (or use the QR button) to show a scannable QR code for joining the router's WiFi
-- **Auto-launch** at login
-- No Dock icon, no menubar clutter — _pure status bar utility_
+  - Blinking antenna while the first router metrics fetch is in progress
+- ✅ **WiFi QR share** — Option-click the icon (or use the QR button) to show a scannable QR code for joining the router's WiFi
 
-## Building
+## Install
+
+Download the latest release from [GitHub Releases](https://github.com/valeriansaliou/datahawk/releases) and drag **DataHawk.app** into your Applications folder.
+
+### Hotspot setup procedure
+
+1. Launch DataHawk — the antenna icon appears in the menu bar.
+2. Grant **Location Services** permission when prompted (needed for WiFi BSSID detection).
+3. Click the icon → **Settings** → **Hotspots** tab → **Add Hotspot**.
+4. Fill in the details for your router:
+
+| Field | Description |
+|---|---|
+| **Name** | A label you'll recognise, e.g. "Office M6 Pro" |
+| **BSSID** | The MAC address of the router's WiFi radio (shown in the disconnected view if unknown) |
+| **Vendor** | Router manufacturer (currently: NETGEAR) |
+| **Username** | Router admin username |
+| **Password** | Router admin password |
+| **Admin URL** *(optional)* | Override the auto-detected admin URL, e.g. `http://192.168.1.1` |
+
+5. Connect your Mac to that router's WiFi — DataHawk will now show the information from your router in your macOS menu bar.
+
+### Finding your WiFi BSSID
+
+The BSSID is the MAC address of the router's WiFi access point. When DataHawk is running but no hotspot is configured, the popover shows the **detected BSSID** of the current network with a copy button — paste it directly into the settings form.
+
+DataHawk uses the BSSID as a means to securely know when you are connected to a known hotpost. DataHawk only attempts to login to the router's administrator area for known BSSIDs, meaning your credentials are not sent to other WiFi routers (eg. your home fiber router, a public coffee shop, etc.).
+
+⚠️ **Note that the WiFi BSSID is different for your 5GHz network and your 2.4GHz network**. When your MacBook gets far away from your router, then you might roam from 5GHz to 2.4GHz, therefore your BSSID will change. **You will need to configure a second BSSID in DataHawk** with the same credentials for your metrics to show properly on both 5GHz and 2.4GHz.
+
+## Uninstall
+
+1. Quit DataHawk from the menu bar.
+2. Delete **DataHawk.app** from your Applications folder.
+3. Remove the login item in **System Settings → General → Login Items** if you had enabled it.
+
+## Build from source
 
 Requires Xcode Command Line Tools (`xcode-select --install`). No third-party dependencies.
 
@@ -46,40 +84,14 @@ git clone https://github.com/valeriansaliou/datahawk.git
 cd datahawk
 
 # Build DataHawk.app in the project root
-make
+make app
 
-# Build and launch immediately (kills any running instance first)
-make all-dev
+# Build and launch immediately (kills any running instance first, used for development)
+make app-dev
 
 # Clean all build artefacts
 make clean
 ```
-
-`make` produces `DataHawk.app` in the project root. Drag it to `/Applications` to install.
-
-### Code signing (optional)
-
-Pass your Developer ID signing identity to skip the interactive prompt:
-
-```bash
-make SIGN_ID="Developer ID Application: Your Name (XXXXXXXXXX)"
-```
-
-Leave it empty to build without signing (works fine for local use). You can also persist it in a `local.env` file (gitignored):
-
-```bash
-echo 'export SIGN_ID="Developer ID Application: Your Name (XXXXXXXXXX)"' >> local.env
-```
-
-### Build from source
-
-```bash
-make app
-```
-
-Requires Xcode command line tools and a valid Developer ID for signing.
-
-If you don't, you will be asked for your signature key identifier when building the app. 
 
 ### Release & notarize
 
@@ -108,30 +120,6 @@ make release
 ```bash
 export SIGN_ID=Developer ID Application: Your Developer Name (IDENTIFIER_HERE)
 ```
-
-## Setup
-
-1. Launch DataHawk — the antenna icon appears in the menu bar.
-2. Grant **Location Services** permission when prompted (needed for WiFi BSSID detection).
-3. Click the icon → **Settings** → **Hotspots** tab → **Add Hotspot**.
-4. Fill in the details for your router:
-
-| Field | Description |
-|---|---|
-| **Name** | A label you'll recognise, e.g. "Office M6 Pro" |
-| **BSSID** | The MAC address of the router's WiFi radio (shown in the disconnected view if unknown) |
-| **Vendor** | Router manufacturer (currently: NETGEAR) |
-| **Username** | Router admin username |
-| **Password** | Router admin password |
-| **Admin URL** *(optional)* | Override the auto-detected admin URL, e.g. `http://192.168.1.1` |
-
-5. Connect your Mac to that router's WiFi — DataHawk picks it up automatically.
-
-### Finding your BSSID
-
-The BSSID is the MAC address of the router's WiFi access point. When DataHawk is running but no hotspot is configured, the popover shows the **detected BSSID** of the current network with a copy button — paste it directly into the settings form.
-
-Alternatively, find it in **System Settings → Wi-Fi → Details → BSSID**.
 
 ## Usage
 
