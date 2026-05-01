@@ -4,8 +4,6 @@
 
 ### Features
 
-- [ ] Support keyboard paste in add hotspot form
-- [ ] Prefill BSSID with current hotspot BSSID in form (and name with SSID)
 - [ ]
 
 ### Bugs
@@ -43,6 +41,8 @@
   - [x] SIM card is locked
   - [x] APN is not connected
 - [x] Make the GitHub project public
+- [x] Support keyboard paste in add hotspot form
+- [x] Prefill BSSID with current hotspot BSSID in form (and name with SSID)
 
 ### 27 Apr 2026
 

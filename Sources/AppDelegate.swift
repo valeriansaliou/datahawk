@@ -17,6 +17,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // somehow overridden at runtime.
         NSApp.setActivationPolicy(.accessory)
 
+        // Accessory-policy apps have no default menu, so Cmd+V never reaches
+        // text fields. Install a minimal menu with just Paste to wire it up.
+        setupPasteMenu()
+
         // Boot the status-bar icon and begin monitoring WiFi.
         statusBarController = StatusBarController()
         statusBarController.start()
@@ -36,5 +40,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         statusBarController.stop()
+    }
+
+    // MARK: - Menu
+
+    private func setupPasteMenu() {
+        let mainMenu = NSMenu()
+
+        let appItem = NSMenuItem()
+        mainMenu.addItem(appItem)
+        appItem.submenu = NSMenu()
+
+        let editItem = NSMenuItem()
+        mainMenu.addItem(editItem)
+        let editMenu = NSMenu(title: "Edit")
+        editItem.submenu = editMenu
+        editMenu.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+
+        NSApp.mainMenu = mainMenu
     }
 }

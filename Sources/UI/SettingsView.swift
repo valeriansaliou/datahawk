@@ -476,16 +476,21 @@ struct HotspotFormView: View {
 
     // MARK: - Helpers
 
-    /// Pre-fills the form fields when editing an existing hotspot.
+    /// Pre-fills form fields from the existing hotspot (edit) or from the
+    /// currently detected WiFi BSSID/SSID (add).
     private func prefill() {
-        guard let h = existing else { return }
-
-        name          = h.name
-        macAddress    = h.macAddress
-        vendor        = h.vendor
-        username      = h.username
-        password      = h.password
-        customBaseURL = h.customBaseURL ?? ""
+        if let h = existing {
+            name          = h.name
+            macAddress    = h.macAddress
+            vendor        = h.vendor
+            username      = h.username
+            password      = h.password
+            customBaseURL = h.customBaseURL ?? ""
+        } else {
+            macAddress = AppState.shared.detectedBSSID ?? ""
+            name       = AppState.shared.detectedSSID  ?? ""
+            username   = vendor == .netgear ? "Admin" : ""
+        }
     }
 
     /// Writes the form data to ConfigStore (add or update).
