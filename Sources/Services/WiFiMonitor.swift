@@ -28,7 +28,7 @@ private func ipv4StoreCallback(
 
 // MARK: -
 
-class WiFiMonitor {
+final class WiFiMonitor {
 
     /// Called on the main thread whenever the WiFi path or IPv4 state changes.
     var onNetworkChange: (() -> Void)?

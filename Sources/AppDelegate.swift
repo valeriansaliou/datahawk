@@ -7,7 +7,7 @@
 
 import AppKit
 
-class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusBarController: StatusBarController!
 
     // MARK: - Lifecycle
@@ -31,7 +31,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         LocationPermissionManager.shared.requestIfNeeded()
 
         // Check for a newer release 5 s after launch (non-blocking).
-        checkForUpdates()
+        UpdateChecker.checkForUpdates()
     }
 
     func applicationWillTerminate(_ notification: Notification) {

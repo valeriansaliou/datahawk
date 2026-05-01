@@ -9,7 +9,7 @@ import AppKit
 import SwiftUI
 import Combine
 
-class StatusBarController: NSObject, NSPopoverDelegate {
+final class StatusBarController: NSObject, NSPopoverDelegate {
 
     // MARK: - Properties
 
@@ -167,51 +167,29 @@ class StatusBarController: NSObject, NSPopoverDelegate {
 
         frameObserver?.invalidate()
         frameObserver = nil
-
     }
 
     // MARK: - State observer (icon updates)
 
-    /// Subscribes to AppState changes and updates the status-bar icon
-    /// whenever the connection state, network type, battery, or data usage
-    /// changes.
+    /// Subscribes to AppState changes and updates the status-bar icon whenever
+    /// the connection state or metrics object changes. Every metrics fetch
+    /// replaces the value wholesale, so observing the two top-level publishers
+    /// captures every relevant transition without nested CombineLatest.
     private func setupStateObserver() {
-        Publishers.CombineLatest(
-            Publishers.CombineLatest(
-                Publishers.CombineLatest(
-                    Publishers.CombineLatest3(
-                        AppState.shared.$connectionState,
-                        AppState.shared.$metrics.map { $0?.networkType },
-                        AppState.shared.$metrics.map { m -> Bool in
-                            guard let m, !m.isPluggedIn, let pct = m.batteryPercent else {
-                                return false
-                            }
-                            return pct < m.batteryLowThreshold
-                        }
-                    ),
-                    AppState.shared.$metrics.map { $0?.isHighDataUsage == true }
-                ),
-                AppState.shared.$metrics.map { $0?.connectionStatus }
-            ),
-            AppState.shared.$metrics.map { $0?.isSimLocked == true }
-        )
-        .receive(on: DispatchQueue.main)
-        .sink { [weak self] outerTuple, simLocked in
-            let (innerTuple, connectionStatus) = outerTuple
-            let (tuple, highDataUsage) = innerTuple
-            let (state, networkType, batteryLow) = tuple
-            let routerNotConnected = connectionStatus.map { $0 != "Connected" } ?? false
-
-            self?.applyIcon(
-                state: state,
-                networkType: networkType,
-                batteryLow: batteryLow,
-                highDataUsage: highDataUsage,
-                routerNotConnected: routerNotConnected,
-                simLocked: simLocked
-            )
-        }
-        .store(in: &cancellables)
+        AppState.shared.$connectionState
+            .combineLatest(AppState.shared.$metrics)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] state, metrics in
+                self?.applyIcon(
+                    state: state,
+                    networkType: metrics?.networkType,
+                    batteryLow: metrics?.isBatteryLow ?? false,
+                    highDataUsage: metrics?.isHighDataUsage ?? false,
+                    routerNotConnected: metrics.map { !$0.isRouterConnected } ?? false,
+                    simLocked: metrics?.isSimLocked ?? false
+                )
+            }
+            .store(in: &cancellables)
     }
 
     /// Sets the status-bar icon for the current state. Manages the blink

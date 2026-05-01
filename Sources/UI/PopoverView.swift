@@ -18,7 +18,7 @@ struct PopoverView: View {
             HeaderSection(state: state)
 
             // High data usage warning (above all other content).
-            if state.metrics?.isHighDataUsage == true, let m = state.metrics {
+            if let m = state.metrics, m.isHighDataUsage {
                 Divider()
                 HighDataUsageAlertSection(metrics: m)
             }
@@ -182,7 +182,7 @@ struct HeaderSection: View {
                         .foregroundColor(batteryIconColor(m))
                     Text(batteryStateText(m))
                         .font(.caption)
-                        .foregroundColor(isBatteryLow(m) ? .red : .secondary)
+                        .foregroundColor(m.isBatteryLow ? .red : .secondary)
                 }
             }
         }
@@ -202,11 +202,6 @@ struct HeaderSection: View {
             : "antenna.radiowaves.left.and.right"
     }
 
-    private func isBatteryLow(_ m: RouterMetrics) -> Bool {
-        guard !m.isPluggedIn, let pct = m.batteryPercent else { return false }
-        return pct < m.batteryLowThreshold
-    }
-
     private func batteryIconName(_ m: RouterMetrics) -> String {
         if m.isPluggedIn { return "battery.100percent.bolt" }
 
@@ -220,8 +215,8 @@ struct HeaderSection: View {
     }
 
     private func batteryIconColor(_ m: RouterMetrics) -> Color {
-        if m.isPluggedIn { return .green }
-        return isBatteryLow(m) ? .red : .secondary
+        if m.isPluggedIn   { return .green }
+        return m.isBatteryLow ? .red : .secondary
     }
 
     private func batteryStateText(_ m: RouterMetrics) -> String {
@@ -232,7 +227,7 @@ struct HeaderSection: View {
         guard let pct = m.batteryPercent else { return "\u{2014}" }
 
         if m.isCharging    { return "\(pct)% (Charging)" }
-        if isBatteryLow(m) { return "\(pct)% (Low Battery)" }
+        if m.isBatteryLow  { return "\(pct)% (Low Battery)" }
 
         return "\(pct)%"
     }

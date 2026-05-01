@@ -12,7 +12,7 @@
 
 import CoreLocation
 
-class LocationPermissionManager: NSObject, CLLocationManagerDelegate {
+final class LocationPermissionManager: NSObject, CLLocationManagerDelegate {
     static let shared = LocationPermissionManager()
 
     private let manager = CLLocationManager()

@@ -12,7 +12,7 @@ import CoreImage
 
 // MARK: - Window controller
 
-class WiFiQRWindowController: NSObject, NSWindowDelegate {
+final class WiFiQRWindowController: NSObject, NSWindowDelegate {
     static let shared = WiFiQRWindowController()
 
     private var window: NSWindow?

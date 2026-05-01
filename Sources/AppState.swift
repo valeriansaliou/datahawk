@@ -25,6 +25,12 @@ enum ConnectionState: Equatable {
     case failed
     /// At least one successful fetch has completed — metrics are available.
     case connected
+
+    /// `true` when a known hotspot is in range (either connected, attempting,
+    /// or failed). `false` only for `.noHotspot`.
+    var isHotspotKnown: Bool {
+        self != .noHotspot
+    }
 }
 
 // MARK: - Network type
@@ -46,34 +52,34 @@ enum NetworkType: String, Codable {
 /// Singleton holding every piece of live state that the UI needs. Properties
 /// are grouped by concern: connection lifecycle, fetched metrics, and raw
 /// WiFi detection info (shown in the disconnected view for debugging).
-class AppState: ObservableObject {
+final class AppState: ObservableObject {
     static let shared = AppState()
 
     // -- Connection lifecycle --------------------------------------------------
 
     @Published var connectionState: ConnectionState = .noHotspot
-    @Published var activeHotspot: HotspotConfig?    = nil
-    @Published var lastUpdated: Date?               = nil
+    @Published var activeHotspot: HotspotConfig?
+    @Published var lastUpdated: Date?
 
     // -- Fetched metrics -------------------------------------------------------
 
-    @Published var metrics: RouterMetrics?           = nil
-    @Published var fetchError: String?               = nil
-    @Published var fetchingFromURL: String?          = nil
-    @Published var isFetching: Bool                  = false
+    @Published var metrics: RouterMetrics?
+    @Published var fetchError: String?
+    @Published var fetchingFromURL: String?
+    @Published var isFetching: Bool = false
 
     // -- Raw WiFi detection (debugging) ----------------------------------------
 
     /// BSSID last seen by WiFiMonitor — displayed when disconnected so the user
     /// can copy it into the Settings form.
-    @Published var detectedBSSID: String?            = nil
-    @Published var detectedSSID: String?             = nil
+    @Published var detectedBSSID: String?
+    @Published var detectedSSID: String?
 
     // -- Updates ---------------------------------------------------------------
 
     /// Non-nil when a newer release DMG is available for download. Set by
     /// UpdateChecker; cleared after a successful install by UpdateInstaller.
-    @Published var updateDownloadURL: String?        = nil
+    @Published var updateDownloadURL: String?
 
     private init() {}
 }

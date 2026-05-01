@@ -9,7 +9,7 @@
 import AppKit
 import SwiftUI
 
-class SettingsWindowController: NSObject, NSWindowDelegate {
+final class SettingsWindowController: NSObject, NSWindowDelegate {
     static let shared = SettingsWindowController()
 
     private var window: NSWindow?

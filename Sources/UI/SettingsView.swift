@@ -264,7 +264,7 @@ private struct AboutTab: View {
             Button {
                 guard checkState != .checking else { return }
                 checkState = .checking
-                checkForUpdatesManually(
+                UpdateChecker.checkForUpdatesManually(
                     onFound: { url in
                         AppState.shared.updateDownloadURL = url
                         checkState = .idle

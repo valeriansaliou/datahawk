@@ -22,7 +22,7 @@
 
 import Foundation
 
-class NetgearProvider: RouterProvider {
+final class NetgearProvider: RouterProvider {
 
     // MARK: - Cookie cache
 
@@ -53,38 +53,21 @@ class NetgearProvider: RouterProvider {
         // -- Fast path: reuse cached auth cookie ----------------------------
 
         if let cookies = cachedCookies[base] {
-            var timedOutOnAll = false
+            switch await tryFastPath(cookies: cookies, base: base) {
+            case .success(let metrics):
+                return metrics
 
-            for attempt in 1...2 {
-                do {
-                    let model = try await fetchModelWithCookies(
-                        cookies, base: base, requestTimeout: 5
-                    )
+            case .stale:
+                // Valid HTTP response but unauthenticated — drop the cookie
+                // and fall through to full auth.
+                cachedCookies[base] = nil
+                persistCookies()
 
-                    // If the response contains wwan data the cookie is still valid.
-                    if isAuthenticated(model) {
-                        return extractMetrics(from: model, baseURL: base)
-                    }
-
-                    // Valid HTTP response but unauthenticated — stale cookie.
-                    break
-                } catch let urlErr as URLError where urlErr.code == .timedOut {
-                    if attempt < 2 { continue }
-
-                    timedOutOnAll = true
-                } catch {
-                    // Other network error — fall through to full auth.
-                    break
-                }
-            }
-
-            // Invalidate the stale/expired cookie.
-            cachedCookies[base] = nil
-            persistCookies()
-
-            if timedOutOnAll {
+            case .timedOut:
                 // Router likely not yet reachable (e.g. just switched networks).
-                // Wait before the heavier full-auth flow to give it time.
+                // Drop the cookie and wait before the heavier full-auth flow.
+                cachedCookies[base] = nil
+                persistCookies()
                 try await Task.sleep(for: .seconds(10))
             }
         }
@@ -123,6 +106,48 @@ class NetgearProvider: RouterProvider {
     }
 
     // MARK: - Fast-path helper
+
+    /// Outcome of an attempt to refresh metrics with the cached cookie.
+    private enum FastPathResult {
+        case success(RouterMetrics)
+        case stale       // Cookie rejected by router or response missing wwan data.
+        case timedOut    // Both attempts exceeded the short fast-path timeout.
+    }
+
+    /// Tries up to two short-timeout fetches with the cached auth cookie.
+    /// Returns `.success` on the first authenticated response, `.stale` when
+    /// the router responds but rejects the cookie, and `.timedOut` only when
+    /// every attempt ran out of time.
+    private func tryFastPath(
+        cookies: [HTTPCookie],
+        base: String
+    ) async -> FastPathResult {
+        let attempts = 2
+
+        for attempt in 1...attempts {
+            do {
+                let model = try await fetchModelWithCookies(
+                    cookies, base: base, requestTimeout: 5
+                )
+
+                // If the response contains wwan data the cookie is still valid.
+                if isAuthenticated(model) {
+                    return .success(extractMetrics(from: model, baseURL: base))
+                }
+
+                // Valid HTTP response but unauthenticated — stale cookie.
+                return .stale
+            } catch let urlErr as URLError where urlErr.code == .timedOut {
+                if attempt == attempts { return .timedOut }
+                // Otherwise: retry.
+            } catch {
+                // Other network error — treat as stale so we proceed to full auth.
+                return .stale
+            }
+        }
+
+        return .stale
+    }
 
     /// Fetches `/api/model.json` with pre-seeded cookies (no login).
     private func fetchModelWithCookies(

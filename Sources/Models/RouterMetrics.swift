@@ -22,6 +22,12 @@ struct RouterMetrics {
     /// Connection status as reported by the API, e.g. "Connected", "Connecting".
     var connectionStatus: String
 
+    /// `true` when `connectionStatus` indicates an active cellular link
+    /// (case-insensitive match against "Connected").
+    var isRouterConnected: Bool {
+        connectionStatus.caseInsensitiveCompare("Connected") == .orderedSame
+    }
+
     /// Signal strength expressed as 0–5 bars (clamped by the provider).
     var signalStrength: Int
 
@@ -65,7 +71,7 @@ struct RouterMetrics {
             return false
         }
 
-        return usedPct * 100 >= Double(threshold)
+        return usedPct >= Double(threshold) / 100
     }
 
     // MARK: - Battery
@@ -85,6 +91,13 @@ struct RouterMetrics {
     /// Convenience: `true` when the device is on external power — either
     /// because it has no battery or because it is currently charging.
     var isPluggedIn: Bool { noBattery || isCharging }
+
+    /// `true` when the device is on battery power and below the router's
+    /// configured low-battery threshold.
+    var isBatteryLow: Bool {
+        guard !isPluggedIn, let pct = batteryPercent else { return false }
+        return pct < batteryLowThreshold
+    }
 
     // MARK: - WiFi & clients
 

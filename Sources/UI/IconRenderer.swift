@@ -42,14 +42,8 @@ enum IconRenderer {
             return sfSymbol("antenna.radiowaves.left.and.right.slash")
 
         case .disconnected, .failed:
-            // Faded normal antenna at 35 % opacity — hotspot known but no data yet.
-            let base   = tintedSFIcon("antenna.radiowaves.left.and.right", color: .white)
-            let result = NSImage(size: base.size, flipped: false) { rect in
-                base.draw(in: rect, from: .zero, operation: .sourceOver, fraction: 0.35)
-                return true
-            }
-            result.isTemplate = false
-            return result
+            // Faded normal antenna — hotspot known but no data yet.
+            return faded(tintedSFIcon("antenna.radiowaves.left.and.right", color: .white))
 
         case .loading:
             return sfSymbol("antenna.radiowaves.left.and.right")
@@ -61,27 +55,13 @@ enum IconRenderer {
 
             switch type {
             case .noSignal:
-                let base   = tintedSFIcon("cellularbars", color: .white)
-                let result = NSImage(size: base.size, flipped: false) { rect in
-                    base.draw(in: rect, from: .zero, operation: .sourceOver, fraction: 0.35)
-                    return true
-                }
-                result.isTemplate = false
-                return result
+                return faded(tintedSFIcon("cellularbars", color: .white))
             case .unknown:
                 return sfSymbol("cellularbars")
             default:
-                if routerNotConnected {
-                    let base   = textIcon(type.rawValue, color: .white)
-                    let result = NSImage(size: base.size, flipped: false) { rect in
-                        base.draw(in: rect, from: .zero, operation: .sourceOver, fraction: 0.35)
-                        return true
-                    }
-                    result.isTemplate = false
-                    return result
-                }
-                if highDataUsage { return textIcon(type.rawValue, color: .orange) }
-                if batteryLow    { return textIcon(type.rawValue, color: .systemRed) }
+                if routerNotConnected { return faded(textIcon(type.rawValue, color: .white)) }
+                if highDataUsage      { return textIcon(type.rawValue, color: .orange) }
+                if batteryLow         { return textIcon(type.rawValue, color: .systemRed) }
                 return textIcon(type.rawValue)
             }
         }
@@ -97,16 +77,23 @@ enum IconRenderer {
         // No compositing needed at full opacity.
         if clamped >= 0.99 { return base }
 
+        return faded(base, fraction: clamped)
+    }
+
+    // MARK: - Helpers (private)
+
+    /// Composites `base` at the given opacity into a fresh non-template image.
+    /// Used for greyed-out states (disconnected, failed, no signal) and for
+    /// the loading blink animation.
+    private static func faded(_ base: NSImage, fraction: CGFloat = 0.35) -> NSImage {
         let result = NSImage(size: base.size, flipped: false) { rect in
-            base.draw(in: rect, from: .zero, operation: .sourceOver, fraction: clamped)
+            base.draw(in: rect, from: .zero, operation: .sourceOver, fraction: fraction)
             return true
         }
 
         result.isTemplate = false
         return result
     }
-
-    // MARK: - Helpers (private)
 
     /// Renders an SF Symbol as a small template image sized for the menu bar.
     private static func sfSymbol(_ name: String) -> NSImage {

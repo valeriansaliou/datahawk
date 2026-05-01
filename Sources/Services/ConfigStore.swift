@@ -11,7 +11,7 @@ import Foundation
 import Combine
 import ServiceManagement
 
-class ConfigStore: ObservableObject {
+final class ConfigStore: ObservableObject {
     static let shared = ConfigStore()
 
     // MARK: - UserDefaults keys
@@ -76,9 +76,6 @@ class ConfigStore: ObservableObject {
     /// Comparison is case-insensitive and ignores separators (colons, dashes).
     func hotspot(forBSSID bssid: String) -> HotspotConfig? {
         let normalised = bssid.lowercased().filter { $0.isHexDigit }
-
-        print("[DataHawk] Looking up BSSID '\(normalised)' in \(hotspots.map { $0.normalizedMAC })")
-
         return hotspots.first { $0.normalizedMAC == normalised }
     }
 

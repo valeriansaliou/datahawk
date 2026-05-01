@@ -29,7 +29,7 @@ private actor FetchGate {
 
 // MARK: - Router service
 
-class RouterService {
+final class RouterService {
     static let shared = RouterService()
 
     // MARK: - Configuration
@@ -102,8 +102,7 @@ class RouterService {
                 // the UI catches the transition to connected quickly.
                 let useRetryInterval = await MainActor.run {
                     let state = AppState.shared.connectionState
-                    let routerConnected =
-                        AppState.shared.metrics?.connectionStatus.lowercased() == "connected"
+                    let routerConnected = AppState.shared.metrics?.isRouterConnected ?? false
                     return state == .failed || (state == .connected && !routerConnected)
                 }
 
