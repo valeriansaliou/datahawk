@@ -54,11 +54,11 @@ Download the latest release from [GitHub Releases](https://github.com/valeriansa
 | Field | Description |
 |---|---|
 | **Name** | A label you'll recognise, eg. "Office M6 Pro" |
-| **BSSID** | The MAC address of the router's WiFi radio (shown in the disconnected view if unknown) |
-| **Vendor** | Router manufacturer (currently: NETGEAR) |
+| **BSSID** | The MAC address of the router's WiFi |
+| **Vendor** | Router manufacturer (eg. NETGEAR) |
 | **Username** | Router admin username |
 | **Password** | Router admin password |
-| **Admin URL** *(optional)* | Override the auto-detected admin URL, eg. `http://mywebui` for NETGEAR |
+| **Admin URL** *(optional)* | Override the auto-detected admin URL |
 
 5. Connect your Mac to that router's WiFi — DataHawk will now show the information from your router in your macOS menu bar.
 
