@@ -54,10 +54,9 @@ enum IconRenderer {
             let type = networkType ?? .unknown
 
             switch type {
-            case .noSignal:
-                // Show a faded cellular-bars icon at 35 % opacity — same
-                // treatment as the disconnected antenna, since no signal
-                // means there's nothing useful to display.
+            case .noSignal, .unknown:
+                // Show a faded cellular-bars icon at 35 % opacity — no signal
+                // or unknown type means there's nothing meaningful to badge.
                 let base   = tintedSFIcon("cellularbars", color: .white)
                 let result = NSImage(size: base.size, flipped: false) { rect in
                     base.draw(in: rect, from: .zero, operation: .sourceOver, fraction: 0.35)

@@ -129,17 +129,22 @@ extension NetgearProvider {
     func parseNetworkType(_ raw: String) -> NetworkType {
         let s = raw.uppercased()
 
+        return .unknown // SIMULATION
+
         // 5G variants: "5G", "Nr5gService" → "NR5GSERVICE", "5GSUB6", "NR5G"
         if s.contains("5G") || s.hasPrefix("NR") { return .fiveG }
 
         // 4G / LTE variants
         if s.contains("LTE") || s.contains("4G") { return .fourG }
 
-        // 3G variants: HSPA, WCDMA
-        if s.contains("HSPA") || s.contains("WCDMA") || s.contains("3G") { return .threeG }
+        // 3G variants: HSPA/HSPA+, WCDMA, UMTS, EV-DO, TD-SCDMA, H/H+ shorthands
+        if s.contains("HSPA") || s.contains("WCDMA") || s.contains("UMTS")
+            || s.contains("EVDO") || s.contains("EV-DO") || s.contains("TD-SCDMA")
+            || s.contains("3G") || s == "H" || s == "H+" { return .threeG }
 
-        // 2G variants: EDGE, GPRS
-        if s.contains("EDGE") || s.contains("GPRS") || s.contains("2G") { return .twoG }
+        // 2G variants: EDGE, GPRS, GSM, E/G shorthands
+        if s.contains("EDGE") || s.contains("GPRS") || s.contains("GSM")
+            || s.contains("2G") || s == "E" || s == "G" { return .twoG }
 
         // 1G variants: CDMA, 1xRTT
         if s.contains("CDMA") || s.contains("1X") || s.contains("1G") { return .oneG }
