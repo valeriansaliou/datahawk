@@ -85,9 +85,11 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
         // status items due to the flipped coordinate space.
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
 
-        // Reposition before the first render cycle so the popover sits
-        // exactly below the button.
         if let popoverWindow = popover.contentViewController?.view.window {
+            // Hide immediately so the briefly wrong NSPopover-computed
+            // position is never visible to the user.
+            popoverWindow.alphaValue = 0
+
             let buttonOnScreen = buttonWindow.convertToScreen(
                 button.convert(button.bounds, to: nil)
             )
@@ -121,12 +123,12 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
             // Spaces animation tools).
             popoverWindow.collectionBehavior = [.canJoinAllSpaces, .transient]
 
-            // Auto-focus the popover so keyboard events (ESC) work
-            // without the user clicking inside first. Avoid the full
-            // NSApp.activate(ignoringOtherApps:) call — it triggers a
-            // space switch on some Spaces configurations.
-            popoverWindow.makeKeyAndOrderFront(nil)
-
+            // Reveal and focus on the next run loop turn, after SwiftUI has
+            // completed its first layout pass and the frame is stable.
+            DispatchQueue.main.async {
+                popoverWindow.alphaValue = 1
+                popoverWindow.makeKeyAndOrderFront(nil)
+            }
         }
 
         // Global monitor: catches clicks on other system UI (tray icons, Dock)
