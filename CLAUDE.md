@@ -20,12 +20,15 @@ Developer context for Claude Code. Read this before making changes.
 The project uses a plain `Makefile` with `xcrun swiftc` — no Xcode project, no Swift Package Manager for the binary itself (the `Package.swift` is only for LSP/SourceKit support).
 
 ```bash
-make          # build .build/DataHawk.app
-make all-dev  # build + kill existing process + reopen (use after every change)
-make clean    # remove .build/
+make app          # build DataHawk.app
+make app-dev      # build + kill existing process + reopen (use after every change)
+make dmg          # package DataHawk.app into DataHawk.dmg
+make notarize     # notarize and staple an already-built DMG
+make release      # full release: dmg + notarize (requires SIGN_ID)
+make clean        # remove .build/ and build artefacts
 ```
 
-**Always run `make all-dev` after a successful build** to kill the running instance and reopen the app. The binary runs as a background agent (`LSUIElement = true`) so it doesn't appear in the Dock.
+**Always run `make app-dev` after a successful build** to kill the running instance and reopen the app. The binary runs as a background agent (`LSUIElement = true`) so it doesn't appear in the Dock.
 
 Code signing is optional and interactive. Pass `SIGN_ID` to skip the prompt:
 ```bash
