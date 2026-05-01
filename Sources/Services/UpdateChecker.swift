@@ -49,7 +49,11 @@ private enum ReleaseResult {
 private func fetchRelease(_ completion: @escaping (ReleaseResult) -> Void) {
     guard let url = URL(string: kReleasesURL) else { completion(.error); return }
 
-    URLSession.shared.dataTask(with: url) { data, _, error in
+    let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0"
+    var request = URLRequest(url: url)
+    request.setValue("DataHawk/\(version)", forHTTPHeaderField: "User-Agent")
+
+    URLSession.shared.dataTask(with: request) { data, _, error in
         guard error == nil,
               let data,
               let json       = try? JSONSerialization.jsonObject(with: data) as? [String: Any],

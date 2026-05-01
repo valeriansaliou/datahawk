@@ -186,15 +186,21 @@ final class UpdaterWindowController: NSObject, NSWindowDelegate, URLSessionDownl
             return
         }
 
+        // Set isInstalling on main BEFORE dispatching install(), so
+        // windowShouldClose sees the correct value if the user tries to close
+        // during hdiutil attach. install() then runs on a proper background
+        // queue rather than blocking the URLSession delegate queue.
         DispatchQueue.main.async {
             self.isInstalling               = true
             self.statusLabel.stringValue    = "Installing…"
             self.progressBar.isIndeterminate = true
             self.progressBar.startAnimation(nil)
             self.cancelButton.isEnabled     = false
-        }
 
-        install(dmgPath: dmgPath)
+            DispatchQueue.global(qos: .userInitiated).async {
+                self.install(dmgPath: dmgPath)
+            }
+        }
     }
 
     func urlSession(
