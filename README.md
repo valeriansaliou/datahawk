@@ -16,7 +16,7 @@ _💡 Want to [add a hotspot vendor](./Sources/Providers)? We accept PRs!_
 
 ## Screenshots
 
-![datahawk-screenshot-1](https://github.com/user-attachments/assets/07978787-c3e6-49d0-ab6a-0268f4e76c67)
+![DataHawk app menu](https://github.com/user-attachments/assets/07978787-c3e6-49d0-ab6a-0268f4e76c67)
 
 ## Features
 
@@ -69,6 +69,8 @@ The BSSID is the MAC address of the router's WiFi access point. When DataHawk is
 DataHawk uses the BSSID as a means to securely know when you are connected to a known hotspot. DataHawk only attempts to login to the router's administrator area for known BSSIDs, meaning your credentials are not sent to other WiFi routers (eg. your home fiber router, a public coffee shop, etc.).
 
 ⚠️ **Note that the WiFi BSSID is different for your 5GHz network and your 2.4GHz network**. When your MacBook gets far away from your router, then you might roam from 5GHz to 2.4GHz, therefore your BSSID will change. **You will need to configure a second BSSID in DataHawk** with the same credentials for your metrics to show properly on both 5GHz and 2.4GHz.
+
+![2 hotspots for 5GHz and 2.4GHz WiFi](https://github.com/user-attachments/assets/880173d6-6e13-472d-b2ef-9d55cb20b1e5)
 
 ## Uninstall
 
