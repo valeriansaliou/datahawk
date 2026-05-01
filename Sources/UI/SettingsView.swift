@@ -358,7 +358,7 @@ private struct HotspotRowView: View {
         .padding(.vertical, 10)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(isHovered ? Color.primary.opacity(0.04) : Color.clear)
+                .fill(isHovered ? Color.primary.opacity(0.08) : Color.primary.opacity(0.04))
         )
         .contentShape(Rectangle())
         .onHover { isHovered = $0 }
@@ -432,6 +432,7 @@ struct HotspotFormView: View {
                 Section("Credentials") {
                     TextField("Username", text: $username)
                     SecureField("Password", text: $password)
+                        .textContentType(.init(rawValue: ""))
                 }
 
                 Section {

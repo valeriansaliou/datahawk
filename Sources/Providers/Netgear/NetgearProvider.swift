@@ -132,12 +132,8 @@ class NetgearProvider: RouterProvider {
     ) async throws -> [String: Any] {
         let session = makeFreshSession(requestTimeout: requestTimeout)
 
-        if let storage = session.configuration.httpCookieStorage,
-           let url = URL(string: base) {
+        if let storage = session.configuration.httpCookieStorage {
             for cookie in cookies { storage.setCookie(cookie) }
-
-            // Also set on the shared storage to handle domain mismatches.
-            HTTPCookieStorage.shared.setCookies(cookies, for: url, mainDocumentURL: nil)
         }
 
         return try await fetchJSON(session, "\(base)/api/model.json")

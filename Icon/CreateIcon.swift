@@ -66,7 +66,7 @@ func renderIcon(pixels px: Int) -> NSImage {
 
     // ── 2. SF Symbol (antenna) ────────────────────────────────────────────
     ctx.setBlendMode(.normal)
-    let symPt = s * 0.48
+    let symPt = s * 0.528
     let cfg = NSImage.SymbolConfiguration(pointSize: symPt, weight: .regular)
         .applying(NSImage.SymbolConfiguration(paletteColors: [.white]))
     if let sym = NSImage(systemSymbolName: symbolName, accessibilityDescription: "DataHawk")?
