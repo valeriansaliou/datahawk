@@ -224,8 +224,8 @@ struct MetricsSection: View {
 
             if isSpinner {
                 ProgressView()
-                    .scaleEffect(0.6)
-                    .frame(width: 12, height: 12)
+                    .scaleEffect(0.3)
+                    .frame(width: 6, height: 6)
             }
 
             content()
