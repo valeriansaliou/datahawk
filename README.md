@@ -71,6 +71,7 @@ DataHawk uses the BSSID as a means to securely know when you are connected to a 
 ⚠️ **Note that the WiFi BSSID is different for your 5GHz network and your 2.4GHz network**. When your MacBook gets far away from your router, then you might roam from 5GHz to 2.4GHz, therefore your BSSID will change. **You will need to configure a second BSSID in DataHawk** with the same credentials for your metrics to show properly on both 5GHz and 2.4GHz.
 
 ![2 hotspots for 5GHz and 2.4GHz WiFi](https://github.com/user-attachments/assets/880173d6-6e13-472d-b2ef-9d55cb20b1e5)
+_You will need to add 2 separate hotspots to support both 5GHz WiFi and 2.4GHz._
 
 ## Uninstall
 
