@@ -4,6 +4,8 @@
 
 ### Features
 
+- [ ] Support keyboard paste in add hotspot form
+- [ ] Prefill BSSID with current hotspot BSSID in form (and name with SSID)
 - [ ]
 
 ### Bugs
