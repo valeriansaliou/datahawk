@@ -6,7 +6,7 @@
 
 - [ ] Make an icon for the app
 - [x] Apple Notarization
-- [ ] Publish releases
+- [x] Publish releases
 - [x] Automatic updates
 - [ ] (..)
 
@@ -28,7 +28,8 @@
 
 ### Others
 
-- [ ] Make the GitHub project public
+- [x] Make the GitHub project public
+- [ ] Finalize README.md (re-write file entirely)
 - [ ] (..)
 
 ## ✅ Done

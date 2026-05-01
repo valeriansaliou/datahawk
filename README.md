@@ -71,22 +71,43 @@ Leave it empty to build without signing (works fine for local use). You can also
 echo 'export SIGN_ID="Developer ID Application: Your Name (XXXXXXXXXX)"' >> local.env
 ```
 
-### Creating a release DMG
+### Build from source
 
 ```bash
-# Build and package into DataHawk.dmg (ad-hoc signed)
-make dmg
-
-# Full release: build, sign with Developer ID, package, and notarize
-make release SIGN_ID="Developer ID Application: Your Name (XXXXXXXXXX)"
-
-# Notarize and staple an already-built DMG (standalone)
-make notarize
+make app
 ```
 
-The DMG (`DataHawk.dmg`) is created in the project root and contains the app bundle alongside an `/Applications` shortcut. The version is derived automatically from the latest git tag (format: `v0.0.0`).
+Requires Xcode command line tools and a valid Developer ID for signing.
 
-`make release` runs the full sequence: build → sign → DMG → notarize → staple. Apple ID credentials are read from `APPLE_ID`, `APPLE_TEAM_ID`, and `APPLE_APP_PASSWORD` (set in `local.env` or passed on the command line); any that are missing are prompted for interactively.
+If you don't, you will be asked for your signature key identifier when building the app. 
+
+### Release & notarize
+
+👉 This procedure is only used by repository maintainers to release new versions of DataHawk.
+
+1. Prior to distributing a release, create a new Git tag so that the new version is picked up during build. Tags should be formatted as such: `v1.0.0`.
+
+2. Once tagged, you can build `DataHawk.app`:
+
+```bash
+make app
+```
+
+3. Finally, it needs to be packaged and notarized into `DataHawk.dmg` as such:
+
+```bash
+make release
+```
+
+4. When the final DMG has been packaged and notarized, simply draft a new release on [DataHawk/releases](https://github.com/valeriansaliou/datahawk/releases) and upload `DataHawk.dmg`.
+
+👉 The website does not need to be updated, since the download button points to the `DataHawk.dmg` file from the latest release.
+
+👉 You can configure your signing key by creating a `local.env` file with eg.:
+
+```bash
+export SIGN_ID=Developer ID Application: Your Developer Name (IDENTIFIER_HERE)
+```
 
 ## Setup
 
