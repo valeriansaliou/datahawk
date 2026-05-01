@@ -29,6 +29,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         LocationPermissionManager.shared.requestIfNeeded()
+
+        // Check for a newer release 5 s after launch (non-blocking).
+        checkForUpdates()
     }
 
     func applicationWillTerminate(_ notification: Notification) {
