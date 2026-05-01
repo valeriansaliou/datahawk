@@ -8,11 +8,11 @@
 - [x] Apple Notarization
 - [x] Publish releases
 - [x] Automatic updates
-- [ ] (..)
+- [ ]
 
 ### Bugs
 
-- [ ] (..)
+- [ ]
 
 ### Tests
 
@@ -30,13 +30,13 @@
   - [x] WiFi is off
   - [x] SIM card is locked
   - [x] APN is not connected
-- [ ] (..)
+- [ ]
 
 ### Others
 
 - [x] Make the GitHub project public
 - [ ] Finalize README.md (re-write file entirely)
-- [ ] (..)
+- [ ]
 
 ## ✅ Done
 
