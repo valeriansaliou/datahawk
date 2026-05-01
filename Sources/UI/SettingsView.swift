@@ -29,11 +29,19 @@ struct SettingsView: View {
 
 /// Lists all configured hotspots with hover-reveal edit / delete buttons.
 /// An "Add Hotspot" button and an empty-state CTA are provided.
+/// Wrapper that makes both "add" (no existing) and "edit" (with existing)
+/// presentable as a single sheet item. Using `.sheet(item:)` ensures SwiftUI
+/// binds the item value atomically to the sheet, avoiding the timing bug
+/// where the content closure captures a stale optional before it is set.
+private struct HotspotFormMode: Identifiable {
+    let existing: HotspotConfig?
+    var id: String { existing?.id.uuidString ?? "add" }
+}
+
 private struct HotspotsTab: View {
     @ObservedObject private var store = ConfigStore.shared
 
-    @State private var showingForm = false
-    @State private var editTarget: HotspotConfig? = nil
+    @State private var formMode: HotspotFormMode? = nil
 
     var body: some View {
         VStack(spacing: 0) {
@@ -47,8 +55,7 @@ private struct HotspotsTab: View {
                     LazyVStack(spacing: 8) {
                         ForEach(store.hotspots) { hotspot in
                             HotspotRowView(hotspot: hotspot) {
-                                editTarget  = hotspot
-                                showingForm = true
+                                formMode = HotspotFormMode(existing: hotspot)
                             } onDelete: {
                                 store.remove(id: hotspot.id)
                             }
@@ -58,9 +65,9 @@ private struct HotspotsTab: View {
                 }
             }
         }
-        .sheet(isPresented: $showingForm) {
-            HotspotFormView(existing: editTarget) {
-                showingForm = false
+        .sheet(item: $formMode) { mode in
+            HotspotFormView(existing: mode.existing) {
+                formMode = nil
             }
         }
     }
@@ -81,8 +88,7 @@ private struct HotspotsTab: View {
             Spacer()
 
             Button {
-                editTarget  = nil
-                showingForm = true
+                formMode = HotspotFormMode(existing: nil)
             } label: {
                 Label("Add Hotspot", systemImage: "plus")
                     .font(.system(size: 12, weight: .medium))
@@ -122,8 +128,7 @@ private struct HotspotsTab: View {
             }
 
             Button {
-                editTarget  = nil
-                showingForm = true
+                formMode = HotspotFormMode(existing: nil)
             } label: {
                 Label("Add First Hotspot", systemImage: "plus")
             }
@@ -487,9 +492,12 @@ struct HotspotFormView: View {
             password      = h.password
             customBaseURL = h.customBaseURL ?? ""
         } else {
-            macAddress = AppState.shared.detectedBSSID ?? ""
-            name       = AppState.shared.detectedSSID  ?? ""
-            username   = vendor == .netgear ? "Admin" : ""
+            macAddress    = AppState.shared.detectedBSSID ?? ""
+            name          = AppState.shared.detectedSSID  ?? ""
+            username      = vendor == .netgear ? "Admin" : ""
+            if let gw = WiFiMonitor.currentGatewayIP() {
+                customBaseURL = "http://\(gw)"
+            }
         }
     }
 

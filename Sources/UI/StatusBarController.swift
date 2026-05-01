@@ -282,7 +282,7 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
         if let bssid, let hotspot = store.hotspot(forBSSID: bssid),
            wifiMonitor.hasLANIPAddress() {
             // Known hotspot detected and DHCP has completed — start polling if it's a new one.
-            if state.activeHotspot?.id != hotspot.id {
+            if state.activeHotspot != hotspot {
                 state.activeHotspot = hotspot
                 state.metrics       = nil
                 state.fetchError    = nil

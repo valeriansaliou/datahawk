@@ -122,6 +122,25 @@ final class WiFiMonitor {
         return nil
     }
 
+    // MARK: - Gateway detection
+
+    /// Returns the IPv4 default gateway for the current network (typically the
+    /// router's LAN IP, e.g. "192.168.1.1"). Reads from SCDynamicStore without
+    /// starting a monitor — safe to call from any thread as a one-shot query.
+    static func currentGatewayIP() -> String? {
+        guard let store = SCDynamicStoreCreate(
+            nil, "com.datahawk.gateway-lookup" as CFString, nil, nil
+        ) else { return nil }
+
+        guard let dict   = SCDynamicStoreCopyValue(store, "State:/Network/Global/IPv4" as CFString)
+                               as? [String: Any],
+              let router = dict["Router"] as? String,
+              !router.isEmpty
+        else { return nil }
+
+        return router
+    }
+
     // MARK: - LAN IP detection
 
     /// Returns `true` if any WiFi interface has a routable IPv4 address in the

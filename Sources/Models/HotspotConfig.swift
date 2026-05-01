@@ -19,7 +19,7 @@ enum RouterVendor: String, Codable, CaseIterable, Identifiable {
 
 // MARK: - Hotspot configuration
 
-struct HotspotConfig: Identifiable, Codable {
+struct HotspotConfig: Identifiable, Codable, Equatable {
     var id = UUID()
 
     /// Human-readable label shown in the popover, e.g. "Office M6 Pro".
