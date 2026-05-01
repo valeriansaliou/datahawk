@@ -186,7 +186,8 @@ final class NetgearProvider: RouterProvider {
     // MARK: - URLSession factory
 
     /// Creates an ephemeral session that accepts and sends cookies but shares
-    /// no state with other sessions.
+    /// no state with other sessions. Proxies are disabled so VPN-injected
+    /// system proxies don't intercept requests to the local router IP.
     private func makeFreshSession(requestTimeout: TimeInterval = 8) -> URLSession {
         let cfg = URLSessionConfiguration.ephemeral
 
@@ -194,6 +195,7 @@ final class NetgearProvider: RouterProvider {
         cfg.httpShouldSetCookies       = true
         cfg.timeoutIntervalForRequest  = requestTimeout
         cfg.timeoutIntervalForResource = max(requestTimeout + 4, 12)
+        cfg.connectionProxyDictionary  = [:]
 
         return URLSession(configuration: cfg)
     }
