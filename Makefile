@@ -5,9 +5,9 @@ APPNAME    := DataHawk
 BUNDLE_ID  := com.datahawk.app
 
 # Derive version from the latest git tag (format: v0.1.0 → 0.1.0).
-# Falls back to 0.1.0 if no tag exists yet.
+# Falls back to 0.0.0 if no tag exists yet.
 VERSION    := $(shell git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//')
-VERSION    := $(if $(VERSION),$(VERSION),0.1.0)
+VERSION    := $(if $(VERSION),$(VERSION),0.0.0)
 
 BUILD_DIR  := .build
 APP_BUNDLE := $(BUILD_DIR)/$(APPNAME).app

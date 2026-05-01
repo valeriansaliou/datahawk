@@ -9,7 +9,6 @@ Developer context for Claude Code. Read this before making changes.
 **DataHawk** is a native macOS menu bar app (Swift, no third-party dependencies) that monitors 5G mobile hotspots. It auto-detects when the Mac joins a known router's WiFi network via BSSID matching, then polls the router's admin API on a configurable interval and displays live metrics in a popover.
 
 - **Bundle ID**: `com.datahawk.app`
-- **Version**: 0.1.0
 - **Min macOS**: 26.0 Tahoe
 - **Architecture**: arm64 (Apple Silicon only)
 

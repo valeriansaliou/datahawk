@@ -84,7 +84,7 @@ make release SIGN_ID="Developer ID Application: Your Name (XXXXXXXXXX)"
 make notarize
 ```
 
-The DMG (`DataHawk.dmg`) is created in the project root and contains the app bundle alongside an `/Applications` shortcut. The version is derived automatically from the latest git tag (format: `v0.1.0`).
+The DMG (`DataHawk.dmg`) is created in the project root and contains the app bundle alongside an `/Applications` shortcut. The version is derived automatically from the latest git tag (format: `v0.0.0`).
 
 `make release` runs the full sequence: build → sign → DMG → notarize → staple. Apple ID credentials are read from `APPLE_ID`, `APPLE_TEAM_ID`, and `APPLE_APP_PASSWORD` (set in `local.env` or passed on the command line); any that are missing are prompted for interactively.
 
