@@ -19,8 +19,12 @@ DIST_APP   := $(APPNAME).app
 DMG_NAME   := $(APPNAME).dmg
 DMG_PATH   := $(BUILD_DIR)/$(DMG_NAME)
 DMG_STAGE  := $(BUILD_DIR)/dmg-stage
+Q_DMG      := "$(DMG_NAME)"
 
-SIGN_ID    ?=
+SIGN_ID             ?=
+APPLE_ID            ?=
+APPLE_TEAM_ID       ?=
+APPLE_APP_PASSWORD  ?=
 
 TARGET     := arm64-apple-macos26.0
 
@@ -41,11 +45,9 @@ SWIFT_FLAGS := \
 # All Swift sources, sorted for deterministic compilation order
 SOURCES    := $(shell find Sources -name "*.swift" | sort)
 
-.PHONY: all all-dev dmg release clean run
+.PHONY: app app-dev dmg notarize release clean
 
-all: $(DIST_APP)
-
-$(DIST_APP): $(SOURCES) Resources/Info.plist
+app: $(SOURCES) Resources/Info.plist
 	@mkdir -p "$(MACOS_DIR)" "$(RES_DIR)"
 	$(SWIFT) $(SWIFT_FLAGS) -o "$(MACOS_DIR)/$(APPNAME)" $(SOURCES)
 	@cp Resources/Info.plist "$(CONTENTS)/Info.plist"
@@ -65,14 +67,12 @@ $(DIST_APP): $(SOURCES) Resources/Info.plist
 	@mv "$(APP_BUNDLE)" "$(DIST_APP)"
 	@echo "Built $(DIST_APP) ($(VERSION))"
 
-all-dev: all
+app-dev: app
 	@pkill -x "$(APPNAME)" 2>/dev/null || true
 	@sleep 0.5
 	@open "$(DIST_APP)"
 	@echo "Restarted $(APPNAME)"
 
-# Packages the built .app into a distributable DMG.
-# Requires the .app to already be built (and signed for distribution).
 dmg: $(DIST_APP)
 	@echo "==> Packaging $(DMG_NAME)"
 	@rm -rf "$(DMG_STAGE)" "$(DMG_PATH)"
@@ -90,18 +90,34 @@ dmg: $(DIST_APP)
 	@mv "$(DMG_PATH)" "$(DMG_NAME)"
 	@echo "Created $(DMG_NAME)"
 
-# Full release flow: requires SIGN_ID. Builds, signs, and packages a DMG.
-# Usage: make release SIGN_ID="Developer ID Application: ..."
-release:
-	@if [ -z "$(SIGN_ID)" ]; then \
-	  echo "Error: SIGN_ID is required for release."; \
-	  echo "Usage: make release SIGN_ID=\"Developer ID Application: Your Name (TEAMID)\""; \
-	  exit 1; \
-	fi
-	@$(MAKE) --no-print-directory dmg SIGN_ID="$(SIGN_ID)"
+notarize:
+	@echo "==> Notarizing $(DMG_NAME)..."
+	@apple_id="$(APPLE_ID)"; \
+	apple_team_id="$(APPLE_TEAM_ID)"; \
+	apple_app_password="$(APPLE_APP_PASSWORD)"; \
+	if [ -z "$$apple_id" ]; then \
+	  printf "==> Enter Apple ID (email): "; \
+	  read apple_id; \
+	fi; \
+	if [ -z "$$apple_team_id" ]; then \
+	  printf "==> Enter Apple Team ID: "; \
+	  read apple_team_id; \
+	fi; \
+	if [ -z "$$apple_app_password" ]; then \
+	  printf "==> Enter Apple app-specific password: "; \
+	  read -s apple_app_password; \
+	  echo; \
+	fi; \
+	xcrun notarytool submit $(Q_DMG) \
+	    --apple-id "$$apple_id" \
+	    --team-id "$$apple_team_id" \
+	    --password "$$apple_app_password" \
+	    --wait
+	@echo "==> Stapling notarization ticket..."
+	@xcrun stapler staple $(Q_DMG)
+	@echo "==> Notarized and stapled $(DMG_NAME)"
 
-run: all
-	@open "$(DIST_APP)"
+release: dmg notarize
 
 clean:
 	@rm -rf "$(BUILD_DIR)" "$(DIST_APP)" "$(DMG_NAME)"

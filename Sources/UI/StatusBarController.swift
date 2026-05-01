@@ -286,8 +286,9 @@ class StatusBarController: NSObject, NSPopoverDelegate {
         state.detectedBSSID = bssid
         state.detectedSSID  = wifiMonitor.currentSSID()
 
-        if let bssid, let hotspot = store.hotspot(forBSSID: bssid) {
-            // Known hotspot detected — start polling if it's a new one.
+        if let bssid, let hotspot = store.hotspot(forBSSID: bssid),
+           wifiMonitor.hasLANIPAddress() {
+            // Known hotspot detected and DHCP has completed — start polling if it's a new one.
             if state.activeHotspot?.id != hotspot.id {
                 state.activeHotspot = hotspot
                 state.metrics       = nil

@@ -5,7 +5,7 @@
 ### Features
 
 - [ ] Make an icon for the app
-- [ ] Apple Notarization
+- [x] Apple Notarization
 - [ ] Publish releases
 - [ ] Automatic updates
 - [ ] (..)

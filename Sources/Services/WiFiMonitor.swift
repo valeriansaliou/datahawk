@@ -1,36 +1,75 @@
 // WiFiMonitor.swift
 // DataHawk
 //
-// Monitors WiFi connectivity via NWPathMonitor and exposes the current SSID
-// and BSSID on demand. Fires `onNetworkChange` whenever the path changes
-// (connect, disconnect, roam) so the caller can re-check which hotspot is
-// in range.
+// Monitors WiFi connectivity via NWPathMonitor and SCDynamicStore. Fires
+// `onNetworkChange` on WiFi path changes (association, roam, disconnect) AND
+// when any WiFi interface's IPv4 state changes in the System Configuration
+// database (i.e. DHCP lease acquired, renewed, or released). The two
+// sources complement each other: NWPathMonitor is fast for link-layer events;
+// SCDynamicStore is authoritative for IP-layer readiness.
 
 import Foundation
 import CoreWLAN
 import Network
+import SystemConfiguration
+
+// MARK: - SCDynamicStore C callback
+
+// Must be a global function (not a closure) to be used as a C function pointer.
+private func ipv4StoreCallback(
+    _: SCDynamicStore,
+    _: CFArray,
+    _ info: UnsafeMutableRawPointer?
+) {
+    guard let info else { return }
+    let monitor = Unmanaged<WiFiMonitor>.fromOpaque(info).takeUnretainedValue()
+    DispatchQueue.main.async { monitor.onNetworkChange?() }
+}
+
+// MARK: -
 
 class WiFiMonitor {
 
-    /// Called on the main thread whenever the WiFi path changes.
+    /// Called on the main thread whenever the WiFi path or IPv4 state changes.
     var onNetworkChange: (() -> Void)?
 
-    private let monitor = NWPathMonitor(requiredInterfaceType: .wifi)
-    private let queue   = DispatchQueue(label: "com.datahawk.wifi-monitor", qos: .utility)
+    private let monitor  = NWPathMonitor(requiredInterfaceType: .wifi)
+    private let queue    = DispatchQueue(label: "com.datahawk.wifi-monitor", qos: .utility)
+    private var dynStore: SCDynamicStore?
 
     // MARK: - Lifecycle
 
     func start() {
+        // NWPathMonitor — fast signal for WiFi association / disassociation.
         monitor.pathUpdateHandler = { [weak self] _ in
-            // Bounce to main so the callback can safely touch AppKit / AppState.
             DispatchQueue.main.async { self?.onNetworkChange?() }
         }
-
         monitor.start(queue: queue)
+
+        // SCDynamicStore — fires precisely when any interface's IPv4 config
+        // changes in configd (DHCP lease acquired, renewed, or released).
+        var ctx = SCDynamicStoreContext(
+            version: 0,
+            info: Unmanaged.passUnretained(self).toOpaque(),
+            retain: nil, release: nil, copyDescription: nil
+        )
+
+        guard let store = SCDynamicStoreCreate(
+            nil, "com.datahawk.wifi-monitor" as CFString,
+            ipv4StoreCallback, &ctx
+        ) else { return }
+
+        // Watch all interfaces with a regex pattern key.
+        let patterns = ["State:/Network/Interface/.*/IPv4"] as CFArray
+        SCDynamicStoreSetNotificationKeys(store, nil, patterns)
+        SCDynamicStoreSetDispatchQueue(store, queue)
+
+        dynStore = store
     }
 
     func stop() {
         monitor.cancel()
+        dynStore = nil  // releasing the store unregisters the dispatch queue
     }
 
     // MARK: - SSID detection
@@ -61,12 +100,7 @@ class WiFiMonitor {
     ///      granted location access yet.
     func currentBSSID() -> String? {
         let client = CWWiFiClient.shared()
-
-        // Collect all WiFi interface names for the ipconfig fallback.
-        let ifaceNames: [String] = (client.interfaces() ?? [])
-            .compactMap { $0.interfaceName }
-            .filter { !$0.isEmpty }
-            .nonEmptyOrDefault(["en0", "en1"])
+        let ifaceNames = wifiInterfaceNames()
 
         // Strategy 1: CoreWLAN (requires location permission).
         for iface in client.interfaces() ?? [] {
@@ -86,6 +120,40 @@ class WiFiMonitor {
 
         print("[DataHawk] currentBSSID: no BSSID found on interfaces \(ifaceNames)")
         return nil
+    }
+
+    // MARK: - LAN IP detection
+
+    /// Returns `true` if any WiFi interface has a routable IPv4 address in the
+    /// System Configuration database, meaning DHCP has completed successfully.
+    /// Link-local `169.254.x.x` addresses (APIPA / DHCP failure) are excluded.
+    func hasLANIPAddress() -> Bool {
+        guard let store = dynStore else { return false }
+
+        for name in wifiInterfaceNames() {
+            let key = "State:/Network/Interface/\(name)/IPv4" as CFString
+
+            guard let dict     = SCDynamicStoreCopyValue(store, key) as? [String: Any],
+                  let addrs    = dict["Addresses"] as? [String],
+                  addrs.contains(where: { !$0.hasPrefix("169.254.") }) else { continue }
+
+            print("[DataHawk] LAN IP ready on \(name) (SCDynamicStore)")
+            return true
+        }
+
+        print("[DataHawk] hasLANIPAddress: no routable IPv4 on WiFi interfaces")
+        return false
+    }
+
+    // MARK: - Private helpers
+
+    /// Returns WiFi interface names from CoreWLAN, falling back to ["en0", "en1"].
+    private func wifiInterfaceNames() -> [String] {
+        let client = CWWiFiClient.shared()
+        return (client.interfaces() ?? [])
+            .compactMap { $0.interfaceName }
+            .filter { !$0.isEmpty }
+            .nonEmptyOrDefault(["en0", "en1"])
     }
 
     // MARK: - ipconfig fallback (private)
