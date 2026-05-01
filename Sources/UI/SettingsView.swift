@@ -186,8 +186,13 @@ private struct OptionsTab: View {
 
 // MARK: - About tab
 
-/// Shows app name, version, author, a GitHub link, and a disabled "Check for Updates" button.
+/// Shows app name, version, author, a GitHub link, and a "Check for Updates" button.
 private struct AboutTab: View {
+    private enum UpdateCheckState { case idle, checking, upToDate, error }
+
+    @ObservedObject private var appState = AppState.shared
+    @State private var checkState: UpdateCheckState = .idle
+
     private let githubURL = URL(string: "https://github.com/valeriansaliou/datahawk")!
 
     private var appVersion: String {
@@ -234,20 +239,69 @@ private struct AboutTab: View {
                         if inside { NSCursor.pointingHand.push() } else { NSCursor.pop() }
                     }
 
-                    Button {
-                        // Not yet implemented.
-                    } label: {
-                        Label("Check for Updates", systemImage: "arrow.clockwise")
-                            .font(.system(size: 12, weight: .medium))
-                    }
-                    .controlSize(.small)
-                    .disabled(true)
+                    updateButton
                 }
             }
 
             Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    // MARK: - Update button
+
+    @ViewBuilder
+    private var updateButton: some View {
+        if let url = appState.updateDownloadURL {
+            // A newer version was already found — offer install directly.
+            Button {
+                startUpdate(downloadURL: url)
+            } label: {
+                Label("Install Update", systemImage: "arrow.down.app")
+                    .font(.system(size: 12, weight: .medium))
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.small)
+            .onHover { inside in
+                if inside { NSCursor.pointingHand.push() } else { NSCursor.pop() }
+            }
+        } else {
+            Button {
+                guard checkState != .checking else { return }
+                checkState = .checking
+                checkForUpdatesManually(
+                    onFound: { url in
+                        AppState.shared.updateDownloadURL = url
+                        checkState = .idle
+                    },
+                    onUpToDate: { checkState = .upToDate },
+                    onError:    { checkState = .error }
+                )
+            } label: {
+                switch checkState {
+                case .idle:
+                    Label("Check for Updates", systemImage: "arrow.clockwise")
+                        .font(.system(size: 12, weight: .medium))
+                case .checking:
+                    HStack(spacing: 6) {
+                        ProgressView().scaleEffect(0.7).frame(width: 12, height: 12)
+                        Text("Checking…")
+                    }
+                    .font(.system(size: 12, weight: .medium))
+                case .upToDate:
+                    Label("Up to Date", systemImage: "checkmark")
+                        .font(.system(size: 12, weight: .medium))
+                case .error:
+                    Label("Check Failed — Retry", systemImage: "xmark")
+                        .font(.system(size: 12, weight: .medium))
+                }
+            }
+            .controlSize(.small)
+            .disabled(checkState == .checking)
+            .onHover { inside in
+                if inside { NSCursor.pointingHand.push() } else { NSCursor.pop() }
+            }
+        }
     }
 }
 

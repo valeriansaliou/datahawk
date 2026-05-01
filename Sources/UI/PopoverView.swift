@@ -46,6 +46,11 @@ struct PopoverView: View {
                 }
             }
 
+            if let url = state.updateDownloadURL {
+                Divider()
+                UpdateAvailableSection(downloadURL: url)
+            }
+
             Divider()
             FooterSection()
         }

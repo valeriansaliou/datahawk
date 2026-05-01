@@ -69,5 +69,11 @@ class AppState: ObservableObject {
     @Published var detectedBSSID: String?            = nil
     @Published var detectedSSID: String?             = nil
 
+    // -- Updates ---------------------------------------------------------------
+
+    /// Non-nil when a newer release DMG is available for download. Set by
+    /// UpdateChecker; cleared after a successful install by UpdateInstaller.
+    @Published var updateDownloadURL: String?        = nil
+
     private init() {}
 }

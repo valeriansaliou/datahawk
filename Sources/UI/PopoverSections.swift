@@ -275,7 +275,7 @@ struct FirmwareAlertSection: View {
         HStack(spacing: 8) {
             Image(systemName: "arrow.down.circle.fill")
                 .foregroundColor(.orange)
-            Text("Firmware update available")
+            Text("Router firmware update available")
                 .font(.subheadline)
                 .foregroundColor(.orange)
             Spacer()
@@ -283,6 +283,37 @@ struct FirmwareAlertSection: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
         .background(Color.orange.opacity(0.08))
+    }
+}
+
+// MARK: - App update banner
+
+/// Accent-coloured banner shown when a newer DataHawk release is available.
+/// Tapping "Install" closes the popover and starts the download + install flow.
+struct UpdateAvailableSection: View {
+    let downloadURL: String
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "arrow.down.app.fill")
+                .foregroundColor(.accentColor)
+            Text("App update available")
+                .font(.subheadline)
+                .foregroundColor(.accentColor)
+            Spacer()
+            Button("Install") {
+                NotificationCenter.default.post(name: .datahawkHidePopover, object: nil)
+                startUpdate(downloadURL: downloadURL)
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.small)
+            .onHover { inside in
+                if inside { NSCursor.pointingHand.push() } else { NSCursor.pop() }
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(Color.accentColor.opacity(0.08))
     }
 }
 

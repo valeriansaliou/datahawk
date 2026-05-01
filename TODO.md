@@ -7,7 +7,7 @@
 - [ ] Make an icon for the app
 - [x] Apple Notarization
 - [ ] Publish releases
-- [ ] Automatic updates
+- [x] Automatic updates
 - [ ] (..)
 
 ### Bugs
