@@ -172,11 +172,8 @@ final class NetgearProvider: RouterProvider {
 
     // MARK: - Base URL normalisation
 
-    /// Strips trailing slashes. Does NOT rewrite IP-based URLs to `mywebui`
-    /// because that breaks connectivity when VPN reroutes DNS (mDNS for
-    /// `mywebui` doesn't cross VPN resolvers). The `Host: mywebui` header is
-    /// added on every request instead — the router validates the header, not
-    /// the URL's host component.
+    /// Strips trailing slashes. The URL's host is used as-is — URLSession sets
+    /// the `Host` header from it automatically, so no override is needed.
     private func normalizedBase(_ raw: String) -> String {
         raw.trimmingCharacters(
             in: CharacterSet(charactersIn: "/").union(.whitespaces)
@@ -213,9 +210,6 @@ final class NetgearProvider: RouterProvider {
 
         var req = URLRequest(url: url)
         req.setValue("application/json", forHTTPHeaderField: "Accept")
-        // The router validates the Host header (not the URL host), so sending
-        // `mywebui` lets us connect by IP (e.g. when VPN reroutes mDNS/DNS).
-        req.setValue("mywebui", forHTTPHeaderField: "Host")
 
         let (data, _) = try await session.data(for: req)
 
@@ -233,10 +227,7 @@ final class NetgearProvider: RouterProvider {
             throw ProviderError("Invalid router URL — check Settings")
         }
 
-        var req = URLRequest(url: url)
-        req.setValue("mywebui", forHTTPHeaderField: "Host")
-
-        _ = try await session.data(for: req)
+        _ = try await session.data(from: url)
     }
 
     /// POSTs credentials to the NETGEAR login endpoint.
@@ -265,7 +256,6 @@ final class NetgearProvider: RouterProvider {
         req.setValue(
             "application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type"
         )
-        req.setValue("mywebui", forHTTPHeaderField: "Host")
         req.httpBody = body.data(using: .utf8)
 
         let (_, response) = try await session.data(for: req)

@@ -208,9 +208,6 @@ Two strategies, tried in order:
 
 BSSID matching normalises both sides to lowercase hex-only (strips colons/dashes) before comparing. Falls back to `["en0", "en1"]` if CoreWLAN reports no interfaces.
 
-### URL normalisation (NETGEAR)
-Bare IPv4 admin URLs (e.g. `http://10.0.2.1`) are rewritten to `http://mywebui` via URLComponents host rewrite. The router's HTTP server validates the `Host` header and returns `sessionId=unknown` when addressed by IP. This is critical — without it, auth always fails.
-
 ### URLSession configuration
 `makeFreshSession(requestTimeout:)` creates an **ephemeral** session each time (no shared state). Default request timeout: 8 s. Resource timeout: `max(requestTimeout + 4, 12)` s. Login POST to `/Forms/config` uses 60 s timeout (NETGEAR hardware is very slow here).
 
@@ -317,7 +314,6 @@ PopoverView (280 pt wide)
 - **`@MainActor` on `AppState`/`ConfigStore` is blocked by a background read.** `RouterService.pollInterval` reads `ConfigStore.shared.refreshInterval` from a detached polling `Task` (`Sources/Services/RouterService.swift`), so adding actor isolation would require restructuring the polling loop first. Don't slap `@MainActor` on these without addressing that read.
 - **`HotspotConfig.id` must be `var`, not `let`.** SwiftC warns: "Immutable property will not be decoded because it is declared with an initial value which cannot be overwritten." With `let id = UUID()`, JSON-stored ids are silently dropped and a fresh UUID is generated on every decode — a real data-corruption hazard. Keep `var id = UUID()` for round-trip Codable behavior.
 - **ConfigStore.refreshInterval clamping triggers `didSet` twice.** Second pass is a no-op (value already clamped). Not a bug.
-- **NETGEAR IP → hostname rewrite is mandatory.** Without `http://mywebui`, the router rejects auth. Check `normalizedBase()` in `NetgearProvider` when debugging auth failures.
 - **NETGEAR data values can arrive as strings.** Session counters (`wwan.dataTransferred.totalb`) are strings like `"762096481"`, not numbers. Use `stringToDouble()`.
 - **NETGEAR firmware flag is polymorphic.** Can be `Bool`, `"1"`, or `1`. Handled by `parseFirmwareFlag()`.
 - **PopoverComponents (`DataUsageBar`, `SignalBarsView`) exist but are not currently used** in the popover sections. They're available for future use.
