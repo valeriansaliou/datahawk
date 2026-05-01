@@ -292,7 +292,7 @@ private struct AboutTab: View {
                     Label("Up to Date", systemImage: "checkmark")
                         .font(.system(size: 12, weight: .medium))
                 case .error:
-                    Label("Check Failed — Retry", systemImage: "xmark")
+                    Label("Check Failed — Retry?", systemImage: "xmark")
                         .font(.system(size: 12, weight: .medium))
                 }
             }
