@@ -35,7 +35,6 @@
 ### Others
 
 - [x] Make the GitHub project public
-- [ ] Finalize README.md (re-write file entirely)
 - [ ]
 
 ## ✅ Done
