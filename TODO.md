@@ -4,10 +4,6 @@
 
 ### Features
 
-- [x] Make an icon for the app
-- [x] Apple Notarization
-- [x] Publish releases
-- [x] Automatic updates
 - [ ]
 
 ### Bugs
@@ -16,6 +12,20 @@
 
 ### Tests
 
+- [ ]
+
+### Others
+
+- [ ]
+
+## ✅ Done
+
+### 1 May 2026
+
+- [x] Make an icon for the app
+- [x] Apple Notarization
+- [x] Publish releases
+- [x] Automatic updates
 - [x] Test app in macOS light mode
 - [x] Lower connecting spinner size
 - [x] Fix "—" in signal icon
@@ -30,14 +40,7 @@
   - [x] WiFi is off
   - [x] SIM card is locked
   - [x] APN is not connected
-- [ ]
-
-### Others
-
 - [x] Make the GitHub project public
-- [ ]
-
-## ✅ Done
 
 ### 27 Apr 2026
 
