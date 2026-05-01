@@ -48,11 +48,13 @@ SOURCES    := $(shell find Sources -name "*.swift" | sort)
 
 .PHONY: app app-dev dmg icon notarize release clean
 
-icon: Icon/CreateIcon.swift
+$(ICNS): Icon/CreateIcon.swift
 	@echo "==> Generating $(ICNS)..."
 	@swift Icon/CreateIcon.swift
 	@mv AppIcon.icns $(ICNS)
 	@echo "==> Generated $(ICNS)"
+
+icon: $(ICNS)
 
 app: $(SOURCES) $(ICNS) Resources/Info.plist
 	@mkdir -p "$(MACOS_DIR)" "$(RES_DIR)"
