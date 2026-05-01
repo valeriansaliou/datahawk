@@ -8,9 +8,11 @@ It sits quietly in the status bar and displays live cellular metrics — signal 
 
 📶 **Supported hotspots:**
 
-- NETGEAR
-  - Nighthawk (M3, M6, M6 Pro).
-- _💡 Want to [add a hotspot vendor](./Sources/Providers)? We accept PRs!_
+| Vendor | Supported Models | Feature Support |
+|---|---|---|
+| NETGEAR | Nighthawk M3, M6, M6 Pro | Full |
+
+_💡 Want to [add a hotspot vendor](./Sources/Providers)? We accept PRs!_
 
 ## Screenshots
 
@@ -51,12 +53,12 @@ Download the latest release from [GitHub Releases](https://github.com/valeriansa
 
 | Field | Description |
 |---|---|
-| **Name** | A label you'll recognise, e.g. "Office M6 Pro" |
+| **Name** | A label you'll recognise, eg. "Office M6 Pro" |
 | **BSSID** | The MAC address of the router's WiFi radio (shown in the disconnected view if unknown) |
 | **Vendor** | Router manufacturer (currently: NETGEAR) |
 | **Username** | Router admin username |
 | **Password** | Router admin password |
-| **Admin URL** *(optional)* | Override the auto-detected admin URL, e.g. `http://192.168.1.1` |
+| **Admin URL** *(optional)* | Override the auto-detected admin URL, eg. `http://mywebui` for NETGEAR |
 
 5. Connect your Mac to that router's WiFi — DataHawk will now show the information from your router in your macOS menu bar.
 
@@ -64,7 +66,7 @@ Download the latest release from [GitHub Releases](https://github.com/valeriansa
 
 The BSSID is the MAC address of the router's WiFi access point. When DataHawk is running but no hotspot is configured, the popover shows the **detected BSSID** of the current network with a copy button — paste it directly into the settings form.
 
-DataHawk uses the BSSID as a means to securely know when you are connected to a known hotpost. DataHawk only attempts to login to the router's administrator area for known BSSIDs, meaning your credentials are not sent to other WiFi routers (eg. your home fiber router, a public coffee shop, etc.).
+DataHawk uses the BSSID as a means to securely know when you are connected to a known hotspot. DataHawk only attempts to login to the router's administrator area for known BSSIDs, meaning your credentials are not sent to other WiFi routers (eg. your home fiber router, a public coffee shop, etc.).
 
 ⚠️ **Note that the WiFi BSSID is different for your 5GHz network and your 2.4GHz network**. When your MacBook gets far away from your router, then you might roam from 5GHz to 2.4GHz, therefore your BSSID will change. **You will need to configure a second BSSID in DataHawk** with the same credentials for your metrics to show properly on both 5GHz and 2.4GHz.
 
