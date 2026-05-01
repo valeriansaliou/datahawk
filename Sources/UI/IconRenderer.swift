@@ -54,9 +54,7 @@ enum IconRenderer {
             let type = networkType ?? .unknown
 
             switch type {
-            case .noSignal, .unknown:
-                // Show a faded cellular-bars icon at 35 % opacity — no signal
-                // or unknown type means there's nothing meaningful to badge.
+            case .noSignal:
                 let base   = tintedSFIcon("cellularbars", color: .white)
                 let result = NSImage(size: base.size, flipped: false) { rect in
                     base.draw(in: rect, from: .zero, operation: .sourceOver, fraction: 0.35)
@@ -64,8 +62,9 @@ enum IconRenderer {
                 }
                 result.isTemplate = false
                 return result
+            case .unknown:
+                return sfSymbol("cellularbars")
             default:
-                // Priority: high data usage (orange) > low battery (red) > default.
                 if highDataUsage { return textIcon(type.rawValue, color: .orange) }
                 if batteryLow    { return textIcon(type.rawValue, color: .systemRed) }
                 return textIcon(type.rawValue)

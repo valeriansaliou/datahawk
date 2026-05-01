@@ -38,7 +38,7 @@ enum NetworkType: String, Codable {
     case twoG     = "2G"
     case oneG     = "1G"
     case noSignal = "No Signal"
-    case unknown  = "—"
+    case unknown  = "Unknown"
 }
 
 // MARK: - Shared observable state
