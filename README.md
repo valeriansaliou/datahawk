@@ -1,4 +1,4 @@
-# DataHawk
+# 📶 DataHawk
 
 **DataHawk** is a lightweight macOS menu bar app that monitors your 5G mobile hotspot in real time.
 
@@ -6,7 +6,7 @@ It sits quietly in the status bar and displays live cellular metrics — signal 
 
 ⬇️ **[Download DataHawk for macOS](https://github.com/valeriansaliou/datahawk/releases/latest/download/DataHawk.dmg)**
 
-📶 **Supported hotspots:**
+## Supported hotspots
 
 | Vendor | Supported Models | Feature Support |
 |---|---|---|
@@ -123,7 +123,7 @@ make release
 export SIGN_ID=Developer ID Application: Your Developer Name (IDENTIFIER_HERE)
 ```
 
-## Usage
+## Available shortcuts
 
 | Action | Result |
 |---|---|
