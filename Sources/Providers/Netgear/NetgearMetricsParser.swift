@@ -129,8 +129,6 @@ extension NetgearProvider {
     func parseNetworkType(_ raw: String) -> NetworkType {
         let s = raw.uppercased()
 
-        return .unknown // SIMULATION
-
         // 5G variants: "5G", "Nr5gService" → "NR5GSERVICE", "5GSUB6", "NR5G"
         if s.contains("5G") || s.hasPrefix("NR") { return .fiveG }
 

@@ -177,27 +177,33 @@ class StatusBarController: NSObject, NSPopoverDelegate {
     /// changes.
     private func setupStateObserver() {
         Publishers.CombineLatest(
-            Publishers.CombineLatest3(
-                AppState.shared.$connectionState,
-                AppState.shared.$metrics.map { $0?.networkType },
-                AppState.shared.$metrics.map { m -> Bool in
-                    guard let m, !m.isPluggedIn, let pct = m.batteryPercent else {
-                        return false
+            Publishers.CombineLatest(
+                Publishers.CombineLatest3(
+                    AppState.shared.$connectionState,
+                    AppState.shared.$metrics.map { $0?.networkType },
+                    AppState.shared.$metrics.map { m -> Bool in
+                        guard let m, !m.isPluggedIn, let pct = m.batteryPercent else {
+                            return false
+                        }
+                        return pct < m.batteryLowThreshold
                     }
-                    return pct < m.batteryLowThreshold
-                }
+                ),
+                AppState.shared.$metrics.map { $0?.isHighDataUsage == true }
             ),
-            AppState.shared.$metrics.map { $0?.isHighDataUsage == true }
+            AppState.shared.$metrics.map { $0?.connectionStatus }
         )
         .receive(on: DispatchQueue.main)
-        .sink { [weak self] tuple, highDataUsage in
+        .sink { [weak self] outerTuple, connectionStatus in
+            let (tuple, highDataUsage) = outerTuple
             let (state, networkType, batteryLow) = tuple
+            let routerNotConnected = connectionStatus.map { $0 != "Connected" } ?? false
 
             self?.applyIcon(
                 state: state,
                 networkType: networkType,
                 batteryLow: batteryLow,
-                highDataUsage: highDataUsage
+                highDataUsage: highDataUsage,
+                routerNotConnected: routerNotConnected
             )
         }
         .store(in: &cancellables)
@@ -209,7 +215,8 @@ class StatusBarController: NSObject, NSPopoverDelegate {
         state: ConnectionState,
         networkType: NetworkType?,
         batteryLow: Bool,
-        highDataUsage: Bool
+        highDataUsage: Bool,
+        routerNotConnected: Bool = false
     ) {
         switch state {
         case .loading:
@@ -242,7 +249,8 @@ class StatusBarController: NSObject, NSPopoverDelegate {
                 state: state,
                 networkType: networkType,
                 batteryLow: batteryLow,
-                highDataUsage: highDataUsage
+                highDataUsage: highDataUsage,
+                routerNotConnected: routerNotConnected
             )
         }
     }

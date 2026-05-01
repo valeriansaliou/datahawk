@@ -22,15 +22,17 @@ enum IconRenderer {
     /// Returns the status-bar icon for the given state.
     ///
     /// - Parameters:
-    ///   - state:        Current connection state.
-    ///   - networkType:  Cellular generation (used for the text badge).
-    ///   - batteryLow:   When `true` the badge is rendered in red.
-    ///   - highDataUsage: When `true` the badge is rendered in orange.
+    ///   - state:              Current connection state.
+    ///   - networkType:        Cellular generation (used for the text badge).
+    ///   - batteryLow:         When `true` the badge is rendered in red.
+    ///   - highDataUsage:      When `true` the badge is rendered in orange.
+    ///   - routerNotConnected: When `true` the text badge is rendered at 35 % opacity.
     static func icon(
         state: ConnectionState,
         networkType: NetworkType?,
         batteryLow: Bool = false,
-        highDataUsage: Bool = false
+        highDataUsage: Bool = false,
+        routerNotConnected: Bool = false
     ) -> NSImage {
         switch state {
         case .noHotspot:
@@ -65,6 +67,15 @@ enum IconRenderer {
             case .unknown:
                 return sfSymbol("cellularbars")
             default:
+                if routerNotConnected {
+                    let base   = textIcon(type.rawValue, color: .white)
+                    let result = NSImage(size: base.size, flipped: false) { rect in
+                        base.draw(in: rect, from: .zero, operation: .sourceOver, fraction: 0.35)
+                        return true
+                    }
+                    result.isTemplate = false
+                    return result
+                }
                 if highDataUsage { return textIcon(type.rawValue, color: .orange) }
                 if batteryLow    { return textIcon(type.rawValue, color: .systemRed) }
                 return textIcon(type.rawValue)
