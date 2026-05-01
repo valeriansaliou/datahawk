@@ -56,7 +56,9 @@ Sources/
 │   ├── ConfigStore.swift               # UserDefaults persistence for hotspots + options
 │   ├── RouterService.swift             # Polling loop, FetchGate actor, error formatting
 │   ├── WiFiMonitor.swift               # NWPathMonitor + CoreWLAN BSSID detection
-│   └── LocationPermissionManager.swift # CLLocationManager wrapper (needed for bssid())
+│   ├── LocationPermissionManager.swift # CLLocationManager wrapper (needed for bssid())
+│   ├── UpdateChecker.swift             # Polls GitHub Releases for newer DMGs
+│   └── UpdateInstaller.swift           # Download + DMG mount + replace-app-bundle flow
 │
 ├── Providers/
 │   ├── RouterProvider.swift            # Protocol + ProviderError
@@ -81,9 +83,9 @@ Sources/
 
 ### Enums
 
-**`ConnectionState`** (in `AppState.swift`) — `.disconnected`, `.loading`, `.failed`, `.connected`
+**`ConnectionState`** (in `AppState.swift`) — `.noHotspot`, `.disconnected`, `.loading`, `.failed`, `.connected`. Helper: `isHotspotKnown` (true for everything except `.noHotspot`).
 
-**`NetworkType: String`** (in `AppState.swift`) — `.fiveG("5G")`, `.fourG("4G")`, `.threeG("3G")`, `.twoG("2G")`, `.oneG("1G")`, `.noSignal("No Signal")`, `.unknown("—")`
+**`NetworkType: String`** (in `AppState.swift`) — `.fiveG("5G")`, `.fourG("4G")`, `.threeG("3G")`, `.twoG("2G")`, `.oneG("1G")`, `.noSignal("No Signal")`, `.unknown("Unknown")`
 
 **`RouterVendor: String`** (in `HotspotConfig.swift`) — currently only `.netgear("NETGEAR")`
 
@@ -96,22 +98,29 @@ All singletons use `static let shared`:
 - `LocationPermissionManager.shared` — CLLocationManager wrapper
 - `SettingsWindowController.shared` — singleton NSWindow
 - `WiFiQRWindowController.shared` — singleton NSWindow
+- `UpdaterWindowController.shared` — singleton NSWindow for the update download/install flow
+
+`UpdateChecker` is a stateless `enum` namespace, not a singleton — call its static methods directly: `UpdateChecker.checkForUpdates()` and `UpdateChecker.checkForUpdatesManually(...)`.
 
 ### AppState published properties
 
 - `connectionState: ConnectionState`, `activeHotspot: HotspotConfig?`, `lastUpdated: Date?`
 - `metrics: RouterMetrics?`, `fetchError: String?`, `fetchingFromURL: String?`, `isFetching: Bool`
 - `detectedBSSID: String?`, `detectedSSID: String?` (for debugging in disconnected view)
+- `updateDownloadURL: String?` — set by `UpdateChecker` when a newer release is available; cleared by `UpdaterWindowController` after install
 
 ### RouterMetrics key properties
 
-- **Cellular:** `networkType`, `technology` (raw API string), `connectionStatus`, `signalStrength` (0–5), `provider` (carrier), `isRoaming`
+- **Cellular:** `networkType`, `technology` (raw API string), `connectionStatus`, `signalStrength` (0–5), `provider` (carrier), `isRoaming`, `isSimLocked`
+- **Computed:** `isRouterConnected: Bool` (case-insensitive "Connected" check on `connectionStatus`)
 - **Data:** `dataUsedGB: Double?`, `dataLimitGB: Double?`, `dataHighUsageWarningPct: Int?`
 - **Computed:** `dataUsagePercent: Double?` (0.0–1.0), `isHighDataUsage: Bool`
 - **Battery:** `batteryPercent: Int?`, `isCharging: Bool`, `noBattery: Bool`, `batteryLowThreshold: Int` (default 20)
-- **Computed:** `isPluggedIn: Bool` = `noBattery || isCharging`
+- **Computed:** `isPluggedIn: Bool` = `noBattery || isCharging`; `isBatteryLow: Bool` (true only when on battery and below threshold)
 - **WiFi:** `connectedUsers: Int`, `wifiEnabled: Bool`, `wifiSSID: String?`, `wifiPassphrase: String?`
 - **Other:** `firmwareUpdateAvailable: Bool`, `adminURL: String`
+
+Use the computed predicates (`isBatteryLow`, `isRouterConnected`, `isPluggedIn`, `isHighDataUsage`) instead of recomputing them at view sites — both `PopoverView` and `StatusBarController` rely on them.
 
 ### HotspotConfig properties
 
@@ -148,7 +157,10 @@ POST /Forms/config        → authenticated Set-Cookie  (can be slow: 60 s timeo
 GET  /api/model.json      → full metrics model
 ```
 
-Fast path: inject cached cookies → single `GET /api/model.json`. Up to 2 attempts with 5 s timeout. Falls back to full auth if cookies are stale (`wwan.connection` absent) or both attempts time out (waits 10 s before fallback — router may be rebooting).
+Fast path: inject cached cookies → single `GET /api/model.json`. Up to 2 attempts with 5 s timeout. The helper `tryFastPath(cookies:base:)` returns a `FastPathResult` enum:
+- `.success(RouterMetrics)` — happy path.
+- `.stale` — router replied but the cookie is rejected (`wwan.connection` absent) or another non-timeout error: drop the cookie and proceed to full auth immediately.
+- `.timedOut` — both attempts ran out of time: drop the cookie, sleep 10 s (router may be rebooting), then run full auth.
 
 **Cookie cache:** stored in UserDefaults key `"netgear_cookies_v1"`, keyed by normalized base URL. Flushed via `flushAuth()`.
 
@@ -171,14 +183,21 @@ RouterProvider throws ProviderError (human-readable) or URLError (transport)
 
 | State | Icon |
 |---|---|
+| `.noHotspot` | Slashed antenna at full opacity (template) |
 | `.disconnected` / `.failed` | Faded white antenna (35% opacity, non-template) |
 | `.loading` | Template antenna (caller animates alpha via sine wave) |
+| `.connected` — SIM locked | Orange `simcard` icon (takes priority over network type) |
 | `.connected` — no signal | Faded white cellular bars (35% opacity, non-template) |
-| `.connected` — normal | Text badge (`5G`, `4G`, …), template or tinted |
-| `.connected` — battery low | Text badge, red tint |
+| `.connected` — router not connected | Faded text badge (35% opacity) — `connectionStatus != "Connected"` |
 | `.connected` — high data | Text badge, orange tint (takes priority over battery low) |
+| `.connected` — battery low | Text badge, red tint |
+| `.connected` — normal | Text badge (`5G`, `4G`, …), template |
+
+The 35%-opacity overlay is produced by a single private helper `IconRenderer.faded(_:fraction:)` reused by `loadingIcon(alpha:)`.
 
 Loading animation: `StatusBarController` runs a 0.1 s repeating `Timer`, accumulates phase (`2π / 14` per tick ≈ 1.4 Hz), alpha oscillates 0.4–1.0 via sine wave.
+
+**Icon update subscription:** `setupStateObserver` subscribes to `AppState.shared.$connectionState.combineLatest($metrics)` and recomputes the icon on every emission. `metrics` is replaced wholesale on every fetch, so observing the two top-level publishers captures every relevant transition without nested `CombineLatest`.
 
 **Template vs non-template:** template images adapt to light/dark mode and menu-bar highlight. Non-template used for faded states (manual compositing) and colored badges.
 
@@ -194,6 +213,15 @@ Bare IPv4 admin URLs (e.g. `http://10.0.2.1`) are rewritten to `http://mywebui` 
 
 ### URLSession configuration
 `makeFreshSession(requestTimeout:)` creates an **ephemeral** session each time (no shared state). Default request timeout: 8 s. Resource timeout: `max(requestTimeout + 4, 12)` s. Login POST to `/Forms/config` uses 60 s timeout (NETGEAR hardware is very slow here).
+
+### Update flow
+`UpdateChecker` (enum namespace) hits the GitHub Releases API for `valeriansaliou/datahawk` and finds the first asset whose name ends with `.dmg`. Two entry points:
+- `checkForUpdates()` — called once at launch with a 5 s delay. Silent; sets `AppState.updateDownloadURL` if a newer release exists, which lights up `UpdateAvailableSection` in the popover.
+- `checkForUpdatesManually(onFound:onUpToDate:onError:)` — used by the About tab; reports via callbacks on the main thread.
+
+Version comparison: `versionComponents(_:)` strips a leading `v`, splits on `.`, and compares element-wise (missing components treated as 0).
+
+`UpdateInstaller` / `UpdaterWindowController.shared` runs the install flow: shows a progress window, downloads the DMG via `URLSessionDownloadTask` delegate callbacks, then on completion mounts via `hdiutil attach`, copies `.app` to a `DataHawk.staged.app` sibling, swaps in via `FileManager.replaceItemAt`, detaches the volume, and prompts the user to restart. Restart spawns a detached `/bin/sh -c 'sleep 0.5 && open <bundle>'` then calls `NSApp.terminate`.
 
 ---
 
@@ -258,10 +286,13 @@ PopoverView (280 pt wide)
 ├─ [if metrics] MetricsSection (3 groups: cellular, wifi, data usage)
 ├─ [if metrics] AdminButtonSection (Open Admin UI + QR code)
 ├─ [if firmware update] FirmwareAlertSection (orange banner)
+├─ [if app update] UpdateAvailableSection (accent-coloured banner with Install button)
 └─ FooterSection — Settings + Quit
 ```
 
 **Refresh button:** plain click = `RouterService.refresh()`, Option-click = `RouterService.forceFullRefresh()` (full re-auth).
+
+**Status-bar Option-click:** opens the WiFi QR sheet directly (skipping the popover) when a known hotspot is connected and WiFi credentials are available. Implemented in `StatusBarController.handleClick(_:)`.
 
 **Settings window:** `SettingsView` with TabView (Hotspots tab + Options tab). Hotspot form is a sheet (`HotspotFormView`). Save disabled if name/MAC/username empty. Window posts `.datahawkSettingsDidClose` on close → `StatusBarController.checkConnection()`.
 
@@ -283,6 +314,8 @@ PopoverView (280 pt wide)
 ## Gotchas
 
 - **AppState main-thread rule is not compiler-enforced.** No `@MainActor` annotation; callers must use `DispatchQueue.main` or `MainActor.run`. Violation → Combine crash at runtime.
+- **`@MainActor` on `AppState`/`ConfigStore` is blocked by a background read.** `RouterService.pollInterval` reads `ConfigStore.shared.refreshInterval` from a detached polling `Task` (`Sources/Services/RouterService.swift`), so adding actor isolation would require restructuring the polling loop first. Don't slap `@MainActor` on these without addressing that read.
+- **`HotspotConfig.id` must be `var`, not `let`.** SwiftC warns: "Immutable property will not be decoded because it is declared with an initial value which cannot be overwritten." With `let id = UUID()`, JSON-stored ids are silently dropped and a fresh UUID is generated on every decode — a real data-corruption hazard. Keep `var id = UUID()` for round-trip Codable behavior.
 - **ConfigStore.refreshInterval clamping triggers `didSet` twice.** Second pass is a no-op (value already clamped). Not a bug.
 - **NETGEAR IP → hostname rewrite is mandatory.** Without `http://mywebui`, the router rejects auth. Check `normalizedBase()` in `NetgearProvider` when debugging auth failures.
 - **NETGEAR data values can arrive as strings.** Session counters (`wwan.dataTransferred.totalb`) are strings like `"762096481"`, not numbers. Use `stringToDouble()`.
@@ -307,9 +340,13 @@ PopoverView (280 pt wide)
 ## Coding conventions
 
 - All `AppState` mutations on the main thread (no exceptions).
+- Mark non-inheritable classes `final` (every concrete class in the project currently is).
+- Prefer typed result enums (`FastPathResult`, `ReleaseResult`) over `(success:Bool, error:Error?)` tuples or sentinel booleans.
+- Add derived state as a computed property on the model (see `RouterMetrics.isBatteryLow` / `isRouterConnected`) rather than recomputing in views or services.
+- Drop redundant `= nil` on optional `@Published` properties — Swift defaults them to `nil`.
 - New UI views go in `Sources/UI/`; split files when a file exceeds ~300 lines.
 - New vendor providers go in `Sources/Providers/<VendorName>/`.
 - Use `Task.sleep(for: .seconds(...))` not `Task.sleep(nanoseconds:)`.
 - Prefer `guard` early-exits over nested `if let` chains.
 - No third-party dependencies — Apple frameworks only.
-- Run `make all-dev` to verify a build compiles and the app restarts cleanly.
+- Run `make app-dev` to verify a build compiles and the app restarts cleanly.
