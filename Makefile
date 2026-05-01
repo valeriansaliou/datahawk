@@ -20,6 +20,7 @@ DMG_NAME   := $(APPNAME).dmg
 DMG_PATH   := $(BUILD_DIR)/$(DMG_NAME)
 DMG_STAGE  := $(BUILD_DIR)/dmg-stage
 Q_DMG      := "$(DMG_NAME)"
+ICNS       := Icon/AppIcon.icns
 
 SIGN_ID             ?=
 APPLE_ID            ?=
@@ -45,11 +46,18 @@ SWIFT_FLAGS := \
 # All Swift sources, sorted for deterministic compilation order
 SOURCES    := $(shell find Sources -name "*.swift" | sort)
 
-.PHONY: app app-dev dmg notarize release clean
+.PHONY: app app-dev dmg icon notarize release clean
 
-app: $(SOURCES) Resources/Info.plist
+icon: Icon/CreateIcon.swift
+	@echo "==> Generating $(ICNS)..."
+	@swift Icon/CreateIcon.swift
+	@mv AppIcon.icns $(ICNS)
+	@echo "==> Generated $(ICNS)"
+
+app: $(SOURCES) $(ICNS) Resources/Info.plist
 	@mkdir -p "$(MACOS_DIR)" "$(RES_DIR)"
 	$(SWIFT) $(SWIFT_FLAGS) -o "$(MACOS_DIR)/$(APPNAME)" $(SOURCES)
+	@cp $(ICNS) $(CONTENTS)/Resources/AppIcon.icns
 	@cp Resources/Info.plist "$(CONTENTS)/Info.plist"
 	@/usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $(VERSION)" "$(CONTENTS)/Info.plist"
 	@/usr/libexec/PlistBuddy -c "Set :CFBundleVersion $(VERSION)" "$(CONTENTS)/Info.plist"
@@ -120,5 +128,5 @@ notarize:
 release: dmg notarize
 
 clean:
-	@rm -rf "$(BUILD_DIR)" "$(DIST_APP)" "$(DMG_NAME)"
+	@rm -rf "$(BUILD_DIR)" "$(DIST_APP)" "$(DMG_NAME)" $(ICNS) AppIcon.iconset
 	@echo "Cleaned"

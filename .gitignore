@@ -6,6 +6,10 @@
 DataHawk.app
 DataHawk.dmg
 
+# Icons
+Icon/AppIcon.icns
+AppIcon.iconset/
+
 # Environment variables
 local.env
 .claude/settings.local.json

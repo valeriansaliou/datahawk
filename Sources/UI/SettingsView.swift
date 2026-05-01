@@ -204,15 +204,10 @@ private struct AboutTab: View {
             Spacer()
 
             VStack(spacing: 20) {
-                // App icon badge.
-                ZStack {
-                    RoundedRectangle(cornerRadius: 24, style: .continuous)
-                        .fill(Color.accentColor.opacity(0.10))
-                        .frame(width: 80, height: 80)
-                    Image(systemName: "antenna.radiowaves.left.and.right")
-                        .font(.system(size: 34, weight: .light))
-                        .foregroundStyle(Color.accentColor)
-                }
+                // App icon.
+                Image(nsImage: NSApp.applicationIconImage)
+                    .resizable()
+                    .frame(width: 80, height: 80)
 
                 // Name + version + author.
                 VStack(spacing: 5) {
@@ -291,9 +286,11 @@ private struct AboutTab: View {
                 case .upToDate:
                     Label("Up to Date", systemImage: "checkmark")
                         .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(.green)
                 case .error:
                     Label("Check Failed — Retry?", systemImage: "xmark")
                         .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(.red)
                 }
             }
             .controlSize(.small)
