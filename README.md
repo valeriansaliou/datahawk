@@ -17,10 +17,12 @@ _💡 Want to [add a hotspot vendor](./Sources/Providers)? We accept PRs!_
 ## Screenshots
 
 ![DataHawk app menu](https://github.com/user-attachments/assets/07978787-c3e6-49d0-ab6a-0268f4e76c67)
+_DataHawk appears in your menu bar. It periodically polls the status of your hotspot, if it detects you are connected to it._
 
-<div align="center">⬇️</div>
+<p style="font-size: 30px; text-align: center;">⬇️</p>
 
 ![NETGEAR Nighthawk router](https://github.com/user-attachments/assets/4afd8954-360d-4d45-9776-a215029505b2)
+_A NETGEAR Nighthawk M3. DataHawk is extensible, you can easily add support for new hotspot vendors._
 
 ## Features
 
