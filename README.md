@@ -18,6 +18,10 @@ _💡 Want to [add a hotspot vendor](./Sources/Providers)? We accept PRs!_
 
 ![DataHawk app menu](https://github.com/user-attachments/assets/07978787-c3e6-49d0-ab6a-0268f4e76c67)
 
+<div align="center">⬇️</div>
+
+![NETGEAR Nighthawk router](https://github.com/user-attachments/assets/4afd8954-360d-4d45-9776-a215029505b2)
+
 ## Features
 
 - ✅ **Hotspot auto-detection** — connects automatically when your Mac joins a known hotspot's WiFi network
