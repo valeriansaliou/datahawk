@@ -22,20 +22,17 @@ final class NotificationManager {
 
     func start() {
         watchPermissionRequest()
-        watchBatteryLow()
-        watchNoSignal()
+        watchTransitions()
     }
 
     // MARK: - Permission
 
     private func watchPermissionRequest() {
-        ConfigStore.shared.$notifyBatteryLow
-            .combineLatest(ConfigStore.shared.$notifyNoService)
-            .sink { [weak self] batteryLow, noService in
-                if batteryLow || noService {
-                    self?.requestAuthorizationIfNeeded()
-                }
-            }
+        let batteryEnabled = ConfigStore.shared.$notifyBatteryLow.filter { $0 }
+        let signalEnabled = ConfigStore.shared.$notifyNoService.filter { $0 }
+
+        Publishers.Merge(batteryEnabled, signalEnabled)
+            .sink { [weak self] _ in self?.requestAuthorizationIfNeeded() }
             .store(in: &cancellables)
     }
 
@@ -53,13 +50,14 @@ final class NotificationManager {
         }
     }
 
-    // MARK: - Battery low
+    // MARK: - Transition watching
 
-    private func watchBatteryLow() {
+    private func watchTransitions() {
         AppState.shared.$metrics
             .scan((nil as RouterMetrics?, nil as RouterMetrics?)) { ($0.1, $1) }
             .sink { [weak self] previous, current in
                 self?.checkBatteryLow(previous: previous, current: current)
+                self?.checkNoSignal(previous: previous, current: current)
             }
             .store(in: &cancellables)
     }
@@ -74,17 +72,6 @@ final class NotificationManager {
             title: "Hotspot battery getting low",
             body: "Plug your router to power to stay connected."
         )
-    }
-
-    // MARK: - No signal
-
-    private func watchNoSignal() {
-        AppState.shared.$metrics
-            .scan((nil as RouterMetrics?, nil as RouterMetrics?)) { ($0.1, $1) }
-            .sink { [weak self] previous, current in
-                self?.checkNoSignal(previous: previous, current: current)
-            }
-            .store(in: &cancellables)
     }
 
     private func checkNoSignal(previous: RouterMetrics?, current: RouterMetrics?) {
