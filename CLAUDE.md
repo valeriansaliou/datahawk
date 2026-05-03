@@ -58,7 +58,8 @@ Sources/
 │   ├── WiFiMonitor.swift               # NWPathMonitor + CoreWLAN BSSID detection
 │   ├── LocationPermissionManager.swift # CLLocationManager wrapper (needed for bssid())
 │   ├── UpdateChecker.swift             # Polls GitHub Releases for newer DMGs
-│   └── UpdateInstaller.swift           # Download + DMG mount + replace-app-bundle flow
+│   ├── UpdateInstaller.swift           # Download + DMG mount + replace-app-bundle flow
+│   └── NotificationManager.swift      # UNUserNotificationCenter auth + transition-based alert dispatch
 │
 ├── Providers/
 │   ├── RouterProvider.swift            # Protocol + ProviderError
@@ -101,6 +102,8 @@ All singletons use `static let shared`:
 - `UpdaterWindowController.shared` — singleton NSWindow for the update download/install flow
 
 `UpdateChecker` is a stateless `enum` namespace, not a singleton — call its static methods directly: `UpdateChecker.checkForUpdates()` and `UpdateChecker.checkForUpdatesManually(...)`.
+
+`NotificationManager.shared` — started once at launch via `start()`. Watches `ConfigStore` flags and `AppState.$metrics` via Combine; requests `UNUserNotificationCenter` authorization only when the user enables at least one alert. Never requests permission at launch.
 
 ### AppState published properties
 
@@ -211,6 +214,17 @@ BSSID matching normalises both sides to lowercase hex-only (strips colons/dashes
 ### URLSession configuration
 `makeFreshSession(requestTimeout:)` creates an **ephemeral** session each time (no shared state). Default request timeout: 8 s. Resource timeout: `max(requestTimeout + 4, 12)` s. Login POST to `/Forms/config` uses 60 s timeout (NETGEAR hardware is very slow here).
 
+### Notification flow
+
+`NotificationManager.start()` sets up two independent Combine pipelines on `AppState.$metrics` using `.scan` to pair consecutive values `(previous, current)`. Each pipeline checks for a specific state transition and fires a `UNNotificationRequest` with a fixed identifier (so repeated events replace rather than stack in Notification Center):
+
+| Event | Transition | Identifier |
+|---|---|---|
+| Battery low | `isBatteryLow` false → true | `com.datahawk.battery-low` |
+| Signal lost | `networkType` non-`.noSignal` → `.noSignal` | `com.datahawk.no-signal` |
+
+Both are gated by their respective `ConfigStore` flags (`notifyBatteryLow`, `notifyNoService`). Authorization is requested lazily — only when a flag is first toggled on and the status is still `.notDetermined`. The `OptionsTab` footer reflects the current `UNAuthorizationStatus`: hidden when authorized, red warning when denied with a toggle on, grey hint when not yet determined.
+
 ### Update flow
 `UpdateChecker` (enum namespace) hits the GitHub Releases API for `valeriansaliou/datahawk` and finds the first asset whose name ends with `.dmg`. Two entry points:
 - `checkForUpdates()` — called once at launch with a 5 s delay. Silent; sets `AppState.updateDownloadURL` if a newer release exists, which lights up `UpdateAvailableSection` in the popover.
@@ -238,6 +252,8 @@ Version comparison: `versionComponents(_:)` strips a leading `v`, splits on `.`,
 | Data bar: green→orange | 70% | DataUsageBar |
 | Data bar: orange→red | 90% | DataUsageBar |
 | Bytes per GB | 1,073,741,824 (1024³) | NetgearMetricsParser |
+| Notify battery low (default) | false | ConfigStore |
+| Notify no signal (default) | false | ConfigStore |
 | Signal bars → percentage | ×20 (0–5 → 0–100%) | PopoverSections |
 | Popover width | 280 pt | PopoverView |
 | Settings window | 460×440 pt | SettingsWindowController |

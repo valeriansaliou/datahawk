@@ -16,6 +16,7 @@ let package = Package(
                 .linkedFramework("Network"),
                 .linkedFramework("ServiceManagement"),
                 .linkedFramework("CoreLocation"),
+                .linkedFramework("UserNotifications"),
             ]
         )
     ]

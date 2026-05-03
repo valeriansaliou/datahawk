@@ -16,9 +16,11 @@ final class ConfigStore: ObservableObject {
 
     // MARK: - UserDefaults keys
 
-    private let hotspotsKey        = "datahawk.hotspots.v1"
-    private let refreshIntervalKey = "datahawk.refreshInterval.v1"
-    private let launchAtLoginKey   = "datahawk.launchAtLogin.v1"
+    private let hotspotsKey           = "datahawk.hotspots.v1"
+    private let refreshIntervalKey    = "datahawk.refreshInterval.v1"
+    private let launchAtLoginKey      = "datahawk.launchAtLogin.v1"
+    private let notifyBatteryLowKey   = "datahawk.notifyBatteryLow.v1"
+    private let notifyNoServiceKey    = "datahawk.notifyNoService.v1"
 
     // MARK: - Published state
 
@@ -43,6 +45,16 @@ final class ConfigStore: ObservableObject {
                 print("[DataHawk] Login item update failed: \(error.localizedDescription)")
             }
         }
+    }
+
+    /// Whether to notify when the battery is low.
+    @Published var notifyBatteryLow: Bool = false {
+        didSet { UserDefaults.standard.set(notifyBatteryLow, forKey: notifyBatteryLowKey) }
+    }
+
+    /// Whether to notify when there is no cellular service.
+    @Published var notifyNoService: Bool = false {
+        didSet { UserDefaults.standard.set(notifyNoService, forKey: notifyNoServiceKey) }
     }
 
     /// Polling interval in seconds (clamped to 5–3600). Persisted to
@@ -125,5 +137,9 @@ final class ConfigStore: ObservableObject {
         } else {
             launchAtLogin = true  // first launch: enable and register
         }
+
+        // Notification prefs (default false — no permission requested at launch).
+        notifyBatteryLow = UserDefaults.standard.bool(forKey: notifyBatteryLowKey)
+        notifyNoService  = UserDefaults.standard.bool(forKey: notifyNoServiceKey)
     }
 }

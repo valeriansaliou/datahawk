@@ -4,8 +4,6 @@
 
 ### Features
 
-- [ ] Hotspot battery low / very low notification (configurable in settings, opt-in, auto-hide when plugged)
-- [ ] No signal notification (configurable in settings, opt-in, auto-hide when signal recovered)
 - [ ]
 
 ### Bugs
@@ -21,6 +19,11 @@
 - [ ]
 
 ## ✅ Done
+
+### 3 May 2026
+
+- [x] Hotspot battery low / very low notification (configurable in settings, opt-in, auto-hide when plugged)
+- [x] No signal notification (configurable in settings, opt-in, auto-hide when signal recovered)
 
 ### 1 May 2026
 

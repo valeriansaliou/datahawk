@@ -48,6 +48,9 @@ _A NETGEAR Nighthawk M3. DataHawk is extensible, you can easily add support for 
   - Faded antenna when no hotspot is detected
   - Faded cellular bars when signal is lost
   - Blinking antenna while the first router metrics fetch is in progress
+- ✅ **Notifications** — opt-in alerts for important events (disabled by default):
+  - Low battery warning when the router battery crosses the low threshold
+  - Cellular signal lost when the hotspot drops to no signal
 - ✅ **WiFi QR share** — Option-click the icon (or use the QR button) to show a scannable QR code for joining the router's WiFi
 
 ## Install

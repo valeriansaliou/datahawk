@@ -36,6 +36,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Check for a newer release 5 s after launch (non-blocking).
         UpdateChecker.checkForUpdates()
+
+        // Start watching notification prefs. Permission is only requested
+        // when the user enables at least one alert in Settings.
+        NotificationManager.shared.start()
     }
 
     func applicationWillTerminate(_ notification: Notification) {

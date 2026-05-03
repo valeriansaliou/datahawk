@@ -6,6 +6,7 @@
 // Presented by SettingsWindowController.
 
 import SwiftUI
+import UserNotifications
 
 // MARK: - Root settings view
 
@@ -150,6 +151,7 @@ private struct HotspotsTab: View {
 /// Simple form with a stepper for the auto-refresh interval.
 private struct OptionsTab: View {
     @ObservedObject private var store = ConfigStore.shared
+    @State private var notificationStatus: UNAuthorizationStatus = .notDetermined
 
     var body: some View {
         Form {
@@ -161,6 +163,25 @@ private struct OptionsTab: View {
                 Text("Start DataHawk automatically when you log in.")
                     .font(.caption)
                     .foregroundColor(.secondary)
+            }
+
+            Section {
+                Toggle("Alert me when the battery is low", isOn: $store.notifyBatteryLow)
+                Toggle("Alert me when there is no signal", isOn: $store.notifyNoService)
+            } header: {
+                Text("Notifications")
+            } footer: {
+                let anyOn = store.notifyBatteryLow || store.notifyNoService
+
+                if anyOn && notificationStatus == .denied {
+                    Text("Notifications are disabled in System Settings. Enable them to receive alerts.")
+                        .font(.caption)
+                        .foregroundColor(.red)
+                } else if notificationStatus == .notDetermined {
+                    Text("Enabling any alert will prompt macOS to request notification permission.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
             }
 
             Section {
@@ -186,6 +207,13 @@ private struct OptionsTab: View {
             }
         }
         .formStyle(.grouped)
+        .onAppear {
+            UNUserNotificationCenter.current().getNotificationSettings { settings in
+                DispatchQueue.main.async {
+                    notificationStatus = settings.authorizationStatus
+                }
+            }
+        }
     }
 }
 
