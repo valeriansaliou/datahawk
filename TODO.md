@@ -4,6 +4,8 @@
 
 ### Features
 
+- [ ] Hotspot battery low / very low notification (configurable in settings, opt-in, auto-hide when plugged)
+- [ ] No signal notification (configurable in settings, opt-in, auto-hide when signal recovered)
 - [ ]
 
 ### Bugs
