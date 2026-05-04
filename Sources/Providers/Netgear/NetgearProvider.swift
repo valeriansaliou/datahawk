@@ -17,7 +17,7 @@
 //   - Up to 2 attempts with a short timeout; if both time out the router
 //     is likely not ready yet, so we wait before falling through to the
 //     full auth flow.
-//   - If the response is missing `wwan.connection` (stale / expired cookie),
+//   - If `session.userRole` is not "Admin" (stale / expired cookie),
 //     discard the cache and fall through to full auth immediately.
 
 import Foundation
@@ -130,7 +130,7 @@ final class NetgearProvider: RouterProvider {
                     cookies, base: base, requestTimeout: 5
                 )
 
-                // If the response contains wwan data the cookie is still valid.
+                // session.userRole == "Admin" means the cookie is still valid.
                 if isAuthenticated(model) {
                     return .success(extractMetrics(from: model, baseURL: base))
                 }
@@ -164,10 +164,13 @@ final class NetgearProvider: RouterProvider {
         return try await fetchJSON(session, "\(base)/api/model.json")
     }
 
-    /// Returns `true` when the model contains `wwan.connection`, which is
-    /// only present in an authenticated response.
+    /// Returns `true` when `session.userRole` is "Admin". The router returns
+    /// this field in every model.json response; an expired or missing cookie
+    /// yields a non-Admin role (e.g. "Guest") even if `wwan.connection` is
+    /// present in the reduced public model.
     private func isAuthenticated(_ model: [String: Any]) -> Bool {
-        nestedValue(model, "wwan.connection") != nil
+        (nestedValue(model, "session.userRole") as? String)?
+            .caseInsensitiveCompare("Admin") == .orderedSame
     }
 
     // MARK: - Base URL normalisation
