@@ -16,6 +16,7 @@
 
 ### Others
 
+- [ ] Document how to setup NETGEAR data limit and low data alert (in Admin UI)
 - [ ]
 
 ## ✅ Done
