@@ -104,7 +104,7 @@ final class WiFiMonitor {
 
         // Strategy 1: CoreWLAN (requires location permission).
         for iface in client.interfaces() ?? [] {
-            if let bssid = iface.bssid(), !bssid.isEmpty {
+            if let bssid = validBSSID(iface.bssid()) {
                 print("[DataHawk] BSSID via CoreWLAN (\(iface.interfaceName ?? "?")): \(bssid)")
                 return bssid
             }
@@ -112,7 +112,7 @@ final class WiFiMonitor {
 
         // Strategy 2: ipconfig getsummary (no location permission needed).
         for name in ifaceNames {
-            if let bssid = bssidViaIPConfig(interface: name) {
+            if let bssid = validBSSID(bssidViaIPConfig(interface: name)) {
                 print("[DataHawk] BSSID via ipconfig (\(name)): \(bssid)")
                 return bssid
             }
@@ -120,6 +120,14 @@ final class WiFiMonitor {
 
         print("[DataHawk] currentBSSID: no BSSID found on interfaces \(ifaceNames)")
         return nil
+    }
+
+    /// Returns the BSSID string only when it represents a real address —
+    /// rejects nil, empty strings, and the `<redacted>` placeholder that
+    /// macOS substitutes when Location Services permission is denied.
+    private func validBSSID(_ raw: String?) -> String? {
+        guard let bssid = raw, !bssid.isEmpty, bssid != "<redacted>" else { return nil }
+        return bssid
     }
 
     // MARK: - Gateway detection
