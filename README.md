@@ -156,13 +156,15 @@ export SIGN_ID=Developer ID Application: Your Developer Name (IDENTIFIER_HERE)
 
 Follow those tips to configure your hotspot to make the most of DataHawk features. Some DataHawk features require that you take some extra steps on your router administration UI to enable them.
 
-**Configure data limit and low data alert:**
+**Configure data limit & low data alert**
 
 While connected to your hotspot, enter this URL in your Web browser: `http://mywebui`. Then, login using your administrator credentials.
 
 Then, follow those steps:
 
-TODO
+![How to configure data limit in NETGEAR Nighthawk](https://github.com/user-attachments/assets/418e5a33-7947-4589-ac29-0bab39a9edf2)
+
+You will now be able to see your full data usage metrics in DataHawk.
 
 ## License
 
