@@ -4,19 +4,11 @@
 
 ### Features
 
-- [ ]
-
 ### Bugs
-
-- [ ]
 
 ### Tests
 
-- [ ]
-
 ### Others
-
-- [ ]
 
 ## ✅ Done
 
