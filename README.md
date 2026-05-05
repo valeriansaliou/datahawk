@@ -152,9 +152,9 @@ export SIGN_ID=Developer ID Application: Your Developer Name (IDENTIFIER_HERE)
 
 ## Tips to configure your hotspot
 
-### NETGEAR Nighthawk
-
 Follow those tips to configure your hotspot to make the most of DataHawk features. Some DataHawk features require that you take some extra steps on your router administration UI to enable them.
+
+### NETGEAR Nighthawk
 
 **Configure data limit & low data alert**
 
