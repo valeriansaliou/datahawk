@@ -150,6 +150,20 @@ export SIGN_ID=Developer ID Application: Your Developer Name (IDENTIFIER_HERE)
 | **Click QR button** | Show WiFi QR code share window |
 | **Click Settings** | Open the hotspot and options configuration window |
 
+## Tips to configure your hotspot
+
+### NETGEAR Nighthawk
+
+Follow those tips to configure your hotspot to make the most of DataHawk features. Some DataHawk features require that you take some extra steps on your router administration UI to enable them.
+
+**Configure data limit and low data alert:**
+
+While connected to your hotspot, enter this URL in your Web browser: `http://mywebui`. Then, login using your administrator credentials.
+
+Then, follow those steps:
+
+TODO
+
 ## License
 
 MIT — see [LICENSE](LICENSE).

@@ -16,10 +16,13 @@
 
 ### Others
 
-- [ ] Document how to setup NETGEAR data limit and low data alert (in Admin UI)
 - [ ]
 
 ## ✅ Done
+
+### 5 May 2026
+
+- [x] Document how to setup NETGEAR data limit and low data alert (in Admin UI)
 
 ### 3 May 2026
 
