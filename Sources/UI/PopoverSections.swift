@@ -211,7 +211,7 @@ struct MetricsSection: View {
                             metricRow("Temperature") {
                                 let tempColor: Color? = m.deviceTempCritical
                                     ? .red
-                                    : (temp > (m.useMetricSystem ? 50 : 120) ? .orange : nil)
+                                    : (temp > (m.useMetricSystem ? 55 : 130) ? .orange : nil)
 
                                 HStack(spacing: 4) {
                                     if m.deviceTempCritical {
