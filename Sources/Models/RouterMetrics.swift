@@ -120,4 +120,18 @@ struct RouterMetrics {
 
     /// URL opened when the user taps "Open Admin UI".
     var adminURL: String
+
+    // MARK: - System info
+
+    /// Seconds the router has been running since last boot, or `nil` when unavailable.
+    var uptimeSeconds: Int?
+
+    /// Router chassis temperature in the unit selected by `useMetricSystem`.
+    var routerTemperature: Double?
+
+    /// `true` → temperatures in °C; `false` → °F.
+    var useMetricSystem: Bool
+
+    /// `true` when the router reports a critical device temperature.
+    var deviceTempCritical: Bool
 }

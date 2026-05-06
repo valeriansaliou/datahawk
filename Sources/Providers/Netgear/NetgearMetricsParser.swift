@@ -98,6 +98,13 @@ extension NetgearProvider {
             nestedValue(model, "general.newFirmware")
         )
 
+        // -- System info ------------------------------------------------------
+        let uptimeSeconds = numberValue(model, "general.upTime").map(Int.init)
+
+        let useMetricSystem    = boolValue(model, "general.useMetricSystem") ?? true
+        let routerTemperature  = numberValue(model, "general.devTemperature")
+        let deviceTempCritical = boolValue(model, "power.deviceTempCritical") ?? false
+
         // -- Assemble ---------------------------------------------------------
 
         return RouterMetrics(
@@ -120,7 +127,11 @@ extension NetgearProvider {
             wifiSSID:                 stringValue(model, "wifi.SSID"),
             wifiPassphrase:           stringValue(model, "wifi.passPhrase"),
             firmwareUpdateAvailable:  firmwareUpdateAvailable,
-            adminURL:                 baseURL
+            adminURL:                 baseURL,
+            uptimeSeconds:            uptimeSeconds,
+            routerTemperature:        routerTemperature,
+            useMetricSystem:          useMetricSystem,
+            deviceTempCritical:       deviceTempCritical
         )
     }
 }

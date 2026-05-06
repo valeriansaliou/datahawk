@@ -12,6 +12,12 @@
 
 ## ✅ Done
 
+### 6 May 2026
+
+- [x] Show signal as a human-readable text instead of a % indication
+- [x] Add device temperature information (show alert when the temperature is critical)
+- [x] Add device uptime information
+
 ### 5 May 2026
 
 - [x] Document how to setup NETGEAR data limit and low data alert (in Admin UI)

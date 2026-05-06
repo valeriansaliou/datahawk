@@ -141,7 +141,9 @@ struct MetricsSection: View {
                     }
 
                     metricRow("Signal") {
-                        Text("\(m.signalStrength * 20)%").fontDesign(.monospaced)
+                        Text(signalLabel(m.signalStrength))
+                            .fontDesign(.monospaced)
+                            .foregroundColor(m.signalStrength <= 2 ? .orange : nil)
                     }
                 }
 
@@ -190,7 +192,74 @@ struct MetricsSection: View {
                         }
                     }
                 }
+
+                // Group 4: system info (uptime + temperatures).
+                let hasSystemInfo = m.uptimeSeconds != nil
+                    || m.routerTemperature != nil
+
+                if hasSystemInfo {
+                    Divider()
+
+                    metricGroup {
+                        if let uptime = m.uptimeSeconds {
+                            metricRow("Uptime") {
+                                Text(formatUptime(uptime)).fontDesign(.monospaced)
+                            }
+                        }
+
+                        if let temp = m.routerTemperature {
+                            metricRow("Temperature") {
+                                let tempColor: Color? = m.deviceTempCritical
+                                    ? .red
+                                    : (temp > (m.useMetricSystem ? 50 : 120) ? .orange : nil)
+
+                                HStack(spacing: 4) {
+                                    if m.deviceTempCritical {
+                                        Image(systemName: "exclamationmark.circle.fill")
+                                            .foregroundColor(.red)
+                                            .font(.system(size: 11))
+                                    }
+                                    Text(formatTemperature(temp, metric: m.useMetricSystem))
+                                        .fontDesign(.monospaced)
+                                        .foregroundColor(tempColor)
+                                }
+                            }
+                        }
+
+                    }
+                }
             }
+        }
+    }
+
+    // MARK: - Formatters
+
+    private func signalLabel(_ bars: Int) -> String {
+        switch bars {
+        case 0:  return "None"
+        case 1:  return "Very Poor"
+        case 2:  return "Poor"
+        case 3:  return "Okay"
+        case 4:  return "Good"
+        default: return "Excellent"
+        }
+    }
+
+    private func formatUptime(_ seconds: Int) -> String {
+        let d = seconds / 86400
+        let h = (seconds % 86400) / 3600
+        let m = (seconds % 3600) / 60
+
+        if d > 0 { return "\(d)d" }
+        if h > 0 { return "\(h)h" }
+        return "\(m)m"
+    }
+
+    private func formatTemperature(_ temp: Double, metric: Bool) -> String {
+        if metric {
+            return String(format: "%.0f°C", temp)
+        } else {
+            return String(format: "%.0f°F", temp)
         }
     }
 
