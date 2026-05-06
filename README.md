@@ -154,6 +154,8 @@ export SIGN_ID=Developer ID Application: Your Developer Name (IDENTIFIER_HERE)
 
 Follow those tips to configure your hotspot to make the most of DataHawk features. Some DataHawk features require that you take some extra steps on your router administration UI to enable them.
 
+⚠️ **Make sure that you are always running the latest available version of your hotspot firmware**, since DataHawk can only guarantee it will function properly on modern firmware versions. There might discrepancies between versions in your router internal API data model, that could prevent DataHawk from polling your hotspot. Data model changes are however rare, so if you do not want to update, you might still be good to go with a legacy firmware version for some time.
+
 ### NETGEAR Nighthawk
 
 **Configure data limit & low data alert**
