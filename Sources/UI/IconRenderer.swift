@@ -60,8 +60,8 @@ enum IconRenderer {
                 return sfSymbol("cellularbars")
             default:
                 if routerNotConnected { return faded(textIcon(type.rawValue, color: .white)) }
-                if highDataUsage      { return textIcon(type.rawValue, color: .orange) }
-                if batteryLow         { return textIcon(type.rawValue, color: .systemRed) }
+                if highDataUsage      { return textIcon(type.rawValue, backgroundColor: .orange) }
+                if batteryLow         { return textIcon(type.rawValue, backgroundColor: .systemRed) }
                 return textIcon(type.rawValue)
             }
         }
@@ -118,30 +118,67 @@ enum IconRenderer {
     }
 
     /// Renders a short text label (e.g. "5G", "4G") as a menu-bar image.
-    /// Pass a colour for a non-template tinted icon; `nil` gives a template
-    /// image that adapts to light/dark mode automatically.
-    private static func textIcon(_ label: String, color: NSColor? = nil) -> NSImage {
-        let attrs: [NSAttributedString.Key: Any] = [
-            .font:            NSFont.monospacedSystemFont(ofSize: 11, weight: .semibold),
-            .foregroundColor: color ?? .black,
+    ///
+    /// - `color`:           Tints the text; `nil` produces a template image.
+    /// - `backgroundColor`: When set, draws a rounded filled box in that colour
+    ///                      with white text — used for alert states (battery low,
+    ///                      high data usage) instead of coloured text.
+    private static func textIcon(
+        _ label: String,
+        color: NSColor? = nil,
+        backgroundColor: NSColor? = nil
+    ) -> NSImage {
+        let sizeAttrs: [NSAttributedString.Key: Any] = [
+            .font: NSFont.monospacedSystemFont(ofSize: 11, weight: .semibold),
+            .foregroundColor: NSColor.black,
         ]
 
         let nsLabel  = label as NSString
-        let textSize = nsLabel.size(withAttributes: attrs)
-        let imgSize  = NSSize(
-            width: ceil(textSize.width) + 2,
-            height: ceil(textSize.height)
+        let textSize = nsLabel.size(withAttributes: sizeAttrs)
+
+        let hPad: CGFloat = backgroundColor != nil ? 6 : 1
+        let vPad: CGFloat = backgroundColor != nil ? 2 : 0
+
+        let imgSize = NSSize(
+            width:  ceil(textSize.width)  + hPad * 2,
+            height: ceil(textSize.height) + vPad * 2
         )
 
         let image = NSImage(size: imgSize, flipped: false) { _ in
-            nsLabel.draw(
-                in: NSRect(x: 1, y: 0, width: textSize.width, height: textSize.height),
-                withAttributes: attrs
-            )
+            if let bg = backgroundColor {
+                // Resolve text colour inside the drawing closure so
+                // NSAppearance.current reflects the actual rendering context.
+                let drawAttrs: [NSAttributedString.Key: Any] = [
+                    .font:            NSFont.monospacedSystemFont(ofSize: 11, weight: .semibold),
+                    .foregroundColor: NSColor.white,
+                ]
+
+                let path = NSBezierPath(
+                    roundedRect: NSRect(origin: .zero, size: imgSize),
+                    xRadius: 6, yRadius: 6
+                )
+                bg.setFill()
+                path.fill()
+
+                nsLabel.draw(
+                    in: NSRect(x: hPad, y: vPad, width: textSize.width, height: textSize.height),
+                    withAttributes: drawAttrs
+                )
+            } else {
+                let drawAttrs: [NSAttributedString.Key: Any] = [
+                    .font:            NSFont.monospacedSystemFont(ofSize: 11, weight: .semibold),
+                    .foregroundColor: color ?? NSColor.black,
+                ]
+
+                nsLabel.draw(
+                    in: NSRect(x: hPad, y: vPad, width: textSize.width, height: textSize.height),
+                    withAttributes: drawAttrs
+                )
+            }
             return true
         }
 
-        image.isTemplate = color == nil
+        image.isTemplate = color == nil && backgroundColor == nil
         return image
     }
 }
