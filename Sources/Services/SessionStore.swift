@@ -77,36 +77,6 @@ final class SessionStore: ObservableObject {
         compact()
     }
 
-    // MARK: - CSV export
-
-    func exportCSV() -> String {
-        let isoFormatter = ISO8601DateFormatter()
-        let header = "Date,Duration,Location,Latitude,Longitude,Provider,Roaming,Generation,Data Used (GB),Avg Signal"
-
-        let rows = sessions.map { session -> String in
-            let date     = isoFormatter.string(from: session.startDate)
-            let duration = session.duration.map(Self.formatDuration)
-                ?? (session.isActive ? "Active" : "\u{2014}")
-            let location = session.location?.geocodedName.map(Self.csvEscape) ?? ""
-            let lat      = session.location.map { String($0.latitude) } ?? ""
-            let lon      = session.location.map { String($0.longitude) } ?? ""
-            let provider = Self.csvEscape(session.provider ?? "")
-            let roaming  = session.isRoaming.map { $0 ? "Yes" : "No" } ?? ""
-            let gen      = session.generation ?? ""
-            let dataUsed: String
-            if let gb = session.dataUsedGB {
-                dataUsed = String(format: "%.3f", gb)
-            } else if session.isActive {
-                dataUsed = "Active"
-            } else {
-                dataUsed = "?"
-            }
-            let signal = session.averageSignal.map { String(format: "%.1f", $0) } ?? ""
-
-            return "\(date),\(duration),\(location),\(lat),\(lon),\(provider),\(roaming),\(gen),\(dataUsed),\(signal)"
-        }
-        return ([header] + rows).joined(separator: "\n")
-    }
 
     static func formatDuration(_ interval: TimeInterval) -> String {
         let total = Int(interval)

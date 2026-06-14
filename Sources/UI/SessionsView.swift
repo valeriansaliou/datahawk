@@ -74,6 +74,7 @@ private func isoDate(_ date: Date) -> String        { SessionDateFormat.iso.stri
 struct SessionsView: View {
     @ObservedObject private var store    = SessionStore.shared
     @ObservedObject private var appState = AppState.shared
+    @ObservedObject private var config   = ConfigStore.shared
 
     @State private var selectedTab:         SessionTab = .map
     @State private var selectedSessionID:   UUID?
@@ -201,13 +202,58 @@ struct SessionsView: View {
     }
 
     private func exportCSV() {
-        let csv   = SessionStore.shared.exportCSV()
+        let csv   = buildCSV()
         let panel = NSSavePanel()
         panel.nameFieldStringValue = "datahawk-sessions.csv"
         panel.allowedContentTypes  = [.commaSeparatedText]
         panel.canCreateDirectories = true
         guard panel.runModal() == .OK, let url = panel.url else { return }
         try? csv.write(to: url, atomically: true, encoding: .utf8)
+    }
+
+    private func buildCSV() -> String {
+        let iso = ISO8601DateFormatter()
+        let header = "Start Date,End Date,Duration,Hotspot,Location,Latitude,Longitude,Provider,Roaming,Generation,Data Used (GB),Avg Signal"
+        let currentDataUsedGB = appState.metrics?.dataUsedGB
+        let rows = store.sessions.map { session -> String in
+            let startDate = iso.string(from: session.startDate)
+            let endDate   = session.endDate.map { iso.string(from: $0) } ?? ""
+            let duration  = session.duration.map(SessionStore.formatDuration) ?? ""
+            let hotspotName: String = {
+                if let bssid = session.hotspotBSSID {
+                    return config.hotspot(forBSSID: bssid)?.name ?? "Removed hotspot"
+                }
+                let n = session.hotspotName; return n.isEmpty ? "" : n
+            }()
+            let hotspot   = csvEscape(hotspotName)
+            let location  = session.location?.geocodedName.map { csvEscape($0) } ?? ""
+            let lat       = session.location.map { String($0.latitude) } ?? ""
+            let lon       = session.location.map { String($0.longitude) } ?? ""
+            let provider  = csvEscape(session.provider ?? "")
+            let roaming   = session.isRoaming.map { $0 ? "Yes" : "No" } ?? ""
+            let gen       = session.generation ?? ""
+            let dataUsed: String
+            if session.isActive {
+                let gb: Double? = {
+                    guard let cur = currentDataUsedGB,
+                          let start = session.dataStartGB, cur >= start else { return nil }
+                    return cur - start
+                }()
+                dataUsed = String(format: "%.2f", gb ?? 0)
+            } else {
+                dataUsed = String(format: "%.2f", session.dataUsedGB ?? 0)
+            }
+            let signal = session.averageSignal.map { String(format: "%.1f", $0) } ?? ""
+            return "\(startDate),\(endDate),\(duration),\(hotspot),\(location),\(lat),\(lon),\(provider),\(roaming),\(gen),\(dataUsed),\(signal)"
+        }
+        return ([header] + rows).joined(separator: "\n")
+    }
+
+    private func csvEscape(_ str: String) -> String {
+        if str.contains(",") || str.contains("\"") || str.contains("\n") {
+            return "\"" + str.replacingOccurrences(of: "\"", with: "\"\"") + "\""
+        }
+        return str
     }
 }
 
