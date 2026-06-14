@@ -51,7 +51,12 @@ _A NETGEAR Nighthawk M3. DataHawk is extensible, you can easily add support for 
 - ✅ **Notifications** — opt-in alerts for important events (disabled by default):
   - Low battery warning when the router battery crosses the low threshold
   - Cellular signal lost when the hotspot drops to no signal
-- ✅ **WiFi QR share** — Option-click the icon (or use the QR button) to show a scannable QR code for joining the router's WiFi
+- ✅ **Signal map of past sessions** — measure the quality of your signal based on your location
+  - Stores all your past hotspot sessions with connection quality metadata and location
+  - See all your measured signal quality on a map so that you know which coffee shop has the best signal!
+  - View all past sessions in a table format and export to CSV
+  - This feature can be disabled, the map data is stored locally
+- ✅ **WiFi QR share** — option-click the icon (or use the QR button) to show a scannable QR code for joining the router's WiFi
 
 ## Install
 
