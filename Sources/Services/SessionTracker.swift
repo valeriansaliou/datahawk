@@ -97,14 +97,18 @@ final class SessionTracker: NSObject, CLLocationManagerDelegate {
 
     // MARK: - Crash recovery
 
+    /// Closes any sessions left in the store with `endDate == nil` after a
+    /// previous run. Runs unconditionally — orphans should be finalised even
+    /// when session tracking is currently disabled, otherwise they linger
+    /// forever once the toggle is flipped off.
     private func closeOrphanedSessions() {
-        guard ConfigStore.shared.recordSessionHistory else { return }
-        let orphans = SessionStore.shared.sessions.filter { $0.isActive }
+        let orphans = SessionStore.shared.sessions.filter(\.isActive)
         guard !orphans.isEmpty else { return }
         let now = Date()
-        for var session in orphans {
-            session.endDate = now
-            SessionStore.shared.upsert(session)
+        for session in orphans {
+            var closed = session
+            closed.endDate = now
+            SessionStore.shared.upsert(closed)
         }
         print("[DataHawk] Closed \(orphans.count) orphaned session(s) from previous run.")
     }
@@ -145,33 +149,35 @@ final class SessionTracker: NSObject, CLLocationManagerDelegate {
 
     private func closeActiveSession() {
         guard var session = activeSession else { return }
-        let metrics = AppState.shared.metrics
-        session.endDate = Date()
-        if let dataEnd = metrics?.dataUsedGB { session.dataEndGB = dataEnd }
+        session.endDate   = Date()
+        session.dataEndGB = AppState.shared.metrics?.dataUsedGB
 
-        activeSession = nil
-        stopLocationTimer()
+        activeSession     = nil
         lastKnownLocation = nil
+        stopLocationTimer()
 
         SessionStore.shared.upsert(session)
     }
 
     private func recordSample(from metrics: RouterMetrics) {
-        guard activeSession != nil else { return }
-        activeSession?.signalSamples.append(metrics.signalStrength)
+        guard var session = activeSession else { return }
+        session.signalSamples.append(metrics.signalStrength)
+        activeSession = session
+
         // Flush to disk every 5 minutes regardless of the configured refresh interval.
         let now = Date()
         if now.timeIntervalSince(lastSamplePersist) >= samplePersistInterval {
             lastSamplePersist = now
-            if let s = activeSession { SessionStore.shared.upsert(s) }
+            SessionStore.shared.upsert(session)
         }
     }
 
     // MARK: - Location
 
     private var isLocationAuthorized: Bool {
-        let s = locationManager.authorizationStatus
-        return s == .authorizedAlways || s == .authorized
+        // macOS only ever returns .authorizedAlways here (no .authorizedWhenInUse,
+        // and .authorized is a deprecated iOS alias).
+        locationManager.authorizationStatus == .authorizedAlways
     }
 
     private func requestLocationFix() {
@@ -205,27 +211,31 @@ final class SessionTracker: NSObject, CLLocationManagerDelegate {
         if isAwaitingFirstFix {
             isAwaitingFirstFix = false
             lastKnownLocation = fix
-            guard activeSession != nil else { return }
+            guard var session = activeSession else { return }
 
-            activeSession?.location = SessionLocation(
+            session.location = SessionLocation(
                 latitude: fix.coordinate.latitude,
                 longitude: fix.coordinate.longitude
             )
-            if let s = activeSession { SessionStore.shared.upsert(s) }
+            activeSession = session
+            SessionStore.shared.upsert(session)
 
+            // Capture the session id so a late geocoder callback can't overwrite
+            // a *different* active session if the user moves again in the
+            // meantime (closeActiveSession + openSession swaps activeSession).
+            let pendingID = session.id
             geocode(fix) { [weak self] name in
-                guard var s = self?.activeSession else { return }
-                s.location?.geocodedName = name
-                self?.activeSession = s
-                SessionStore.shared.upsert(s)
+                guard let self, var current = self.activeSession, current.id == pendingID else { return }
+                current.location?.geocodedName = name
+                self.activeSession = current
+                SessionStore.shared.upsert(current)
             }
-        } else if let last = lastKnownLocation {
-            guard fix.distance(from: last) > locationChangeDist else { return }
+        } else if let last = lastKnownLocation, fix.distance(from: last) > locationChangeDist {
             // User has moved significantly — split into a new session.
             closeActiveSession()
             lastKnownLocation = fix
             openSession()
-        } else {
+        } else if lastKnownLocation == nil {
             lastKnownLocation = fix
         }
     }
@@ -241,8 +251,8 @@ final class SessionTracker: NSObject, CLLocationManagerDelegate {
     // Migration deferred until the replacement API stabilises post-WWDC 2025.
     private func geocode(_ location: CLLocation, completion: @escaping (String?) -> Void) {
         CLGeocoder().reverseGeocodeLocation(location) { placemarks, _ in
-            let name = placemarks?.first.map { p -> String in
-                [p.locality, p.administrativeArea, p.country]
+            let name = placemarks?.first.map { placemark in
+                [placemark.locality, placemark.administrativeArea, placemark.country]
                     .compactMap { $0 }
                     .filter { !$0.isEmpty }
                     .joined(separator: ", ")

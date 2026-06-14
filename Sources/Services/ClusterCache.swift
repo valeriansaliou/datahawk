@@ -11,6 +11,8 @@
 //
 // On startup the cache is read from disk; if the file is absent or corrupt,
 // rebuild() is triggered automatically in the background.
+//
+// All mutations to `clusters` happen on the main thread.
 
 import Foundation
 import Combine
@@ -23,6 +25,7 @@ final class ClusterCache: ObservableObject {
 
     struct Cluster: Identifiable, Codable {
         /// ID of the most recent (representative) session in this cluster.
+        /// Updates whenever a newer session joins — drives pin tap navigation.
         var id: UUID
         var latitude: Double
         var longitude: Double
@@ -45,7 +48,13 @@ final class ClusterCache: ObservableObject {
     @Published private(set) var isRebuilding = false
 
     private let fileURL: URL
+
+    /// Two sessions within this many metres are merged into the same cluster.
     static let distanceThreshold: CLLocationDistance = 20
+
+    /// Set when an update arrives while a rebuild is in flight. Triggers a
+    /// follow-up rebuild so the in-flight delta isn't lost.
+    private var rebuildDirty = false
 
     private init() {
         let appSupport = FileManager.default
@@ -60,25 +69,30 @@ final class ClusterCache: ObservableObject {
 
     /// Called after a single session is appended or updated in SessionStore.
     /// Does NOT recompute the whole dataset — only adjusts the affected cluster.
+    ///
+    /// If a rebuild is already in flight, the update is skipped (the rebuild's
+    /// snapshot would overwrite it anyway). `rebuildDirty` is set so a follow-up
+    /// rebuild runs as soon as the current one finishes.
     func updateForSession(_ session: SessionRecord) {
         guard let loc = session.location else { return }
+
+        if isRebuilding {
+            rebuildDirty = true
+            return
+        }
+
         let sessionLoc = CLLocation(latitude: loc.latitude, longitude: loc.longitude)
 
         if let idx = clusters.firstIndex(where: {
-            $0.sessionIDs.contains(session.id)
-            && CLLocation(latitude: $0.latitude, longitude: $0.longitude)
-                .distance(from: sessionLoc) <= Self.distanceThreshold
+            $0.sessionIDs.contains(session.id) && $0.isWithin(Self.distanceThreshold, of: sessionLoc)
         }) {
             // Session already registered in this cluster — refresh display fields
-            // if it is the representative (newest).
+            // if it is still the representative (newest).
             if clusters[idx].sessionIDs.first == session.id {
                 clusters[idx].latestSignal     = session.averageSignal
                 clusters[idx].latestGeneration = session.generation
             }
-        } else if let idx = clusters.firstIndex(where: {
-            CLLocation(latitude: $0.latitude, longitude: $0.longitude)
-                .distance(from: sessionLoc) <= Self.distanceThreshold
-        }) {
+        } else if let idx = clusters.firstIndex(where: { $0.isWithin(Self.distanceThreshold, of: sessionLoc) }) {
             // New session that falls inside an existing cluster.
             clusters[idx].sessionIDs.insert(session.id, at: 0)
             clusters[idx].id               = session.id
@@ -102,9 +116,16 @@ final class ClusterCache: ObservableObject {
 
     /// Rebuilds the cache from scratch on a background task and posts the result
     /// to the main actor. Called after deletions or trim operations.
+    ///
+    /// If called while already rebuilding, sets `rebuildDirty` so a follow-up
+    /// rebuild captures any updates that landed in the meantime.
     func rebuild() {
-        guard !isRebuilding else { return }
+        if isRebuilding {
+            rebuildDirty = true
+            return
+        }
         isRebuilding = true
+        rebuildDirty = false
         let snapshot = SessionStore.shared.sessions
 
         Task { @MainActor [weak self] in
@@ -115,6 +136,12 @@ final class ClusterCache: ObservableObject {
             self.clusters     = result
             self.isRebuilding = false
             self.save()
+
+            // Updates may have arrived during the rebuild — re-run once to pick them up.
+            if self.rebuildDirty {
+                self.rebuildDirty = false
+                self.rebuild()
+            }
         }
     }
 
@@ -122,26 +149,23 @@ final class ClusterCache: ObservableObject {
 
     private static func computeClusters(from sessions: [SessionRecord]) -> [Cluster] {
         let withLoc = sessions
-            .filter { $0.location != nil }
-            .sorted { $0.startDate > $1.startDate }
+            .compactMap { session -> (SessionRecord, SessionLocation)? in
+                guard let loc = session.location else { return nil }
+                return (session, loc)
+            }
+            .sorted { $0.0.startDate > $1.0.startDate }
 
         var result: [Cluster] = []
 
-        for session in withLoc {
-            let loc = CLLocation(
-                latitude:  session.location!.latitude,
-                longitude: session.location!.longitude
-            )
-            if let i = result.firstIndex(where: {
-                CLLocation(latitude: $0.latitude, longitude: $0.longitude)
-                    .distance(from: loc) <= distanceThreshold
-            }) {
+        for (session, loc) in withLoc {
+            let sessionLoc = CLLocation(latitude: loc.latitude, longitude: loc.longitude)
+            if let i = result.firstIndex(where: { $0.isWithin(distanceThreshold, of: sessionLoc) }) {
                 result[i].sessionIDs.append(session.id)
             } else {
                 result.append(Cluster(
                     id:               session.id,
-                    latitude:         session.location!.latitude,
-                    longitude:        session.location!.longitude,
+                    latitude:         loc.latitude,
+                    longitude:        loc.longitude,
                     sessionIDs:       [session.id],
                     latestSignal:     session.averageSignal,
                     latestGeneration: session.generation
@@ -165,5 +189,15 @@ final class ClusterCache: ObservableObject {
     private func save() {
         guard let data = try? JSONEncoder().encode(clusters) else { return }
         try? data.write(to: fileURL, options: .atomic)
+    }
+}
+
+// MARK: - Cluster proximity helper
+
+private extension ClusterCache.Cluster {
+    /// True when this cluster's centre is within `metres` of `location`.
+    func isWithin(_ metres: CLLocationDistance, of location: CLLocation) -> Bool {
+        CLLocation(latitude: latitude, longitude: longitude)
+            .distance(from: location) <= metres
     }
 }

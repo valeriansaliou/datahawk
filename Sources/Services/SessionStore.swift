@@ -20,6 +20,19 @@ final class SessionStore: ObservableObject {
 
     private let fileURL: URL
 
+    /// Shared encoder/decoder — allocating either of these is non-trivial, so
+    /// we keep one of each around for the lifetime of the store.
+    private let encoder: JSONEncoder = {
+        let e = JSONEncoder()
+        e.dateEncodingStrategy = .iso8601
+        return e
+    }()
+    private let decoder: JSONDecoder = {
+        let d = JSONDecoder()
+        d.dateDecodingStrategy = .iso8601
+        return d
+    }()
+
     private init() {
         let appSupport = FileManager.default
             .urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
@@ -39,10 +52,12 @@ final class SessionStore: ObservableObject {
         } else {
             sessions.append(session)
             if trimIfNeeded() {
-                compact()               // compact() triggers ClusterCache.rebuild()
+                // compact() rewrites the file AND triggers ClusterCache.rebuild(),
+                // so the newly-appended session lands via the rebuild path.
+                compact()
             } else {
                 appendLine(session)
-                ClusterCache.shared.updateForSession(session)   // delta: O(clusters)
+                ClusterCache.shared.updateForSession(session)
             }
         }
     }
@@ -65,27 +80,29 @@ final class SessionStore: ObservableObject {
     // MARK: - CSV export
 
     func exportCSV() -> String {
+        let isoFormatter = ISO8601DateFormatter()
         let header = "Date,Duration,Location,Latitude,Longitude,Provider,Roaming,Generation,Data Used (GB),Avg Signal"
-        let rows = sessions.map { s -> String in
-            let fmt = ISO8601DateFormatter()
-            let date     = fmt.string(from: s.startDate)
-            let duration = s.duration.map { SessionStore.formatDuration($0) }
-                ?? (s.isActive ? "Active" : "\u{2014}")
-            let location = s.location?.geocodedName.map { csvEscape($0) } ?? ""
-            let lat      = s.location.map { String($0.latitude) } ?? ""
-            let lon      = s.location.map { String($0.longitude) } ?? ""
-            let provider = csvEscape(s.provider ?? "")
-            let roaming  = s.isRoaming.map { $0 ? "Yes" : "No" } ?? ""
-            let gen      = s.generation ?? ""
+
+        let rows = sessions.map { session -> String in
+            let date     = isoFormatter.string(from: session.startDate)
+            let duration = session.duration.map(Self.formatDuration)
+                ?? (session.isActive ? "Active" : "\u{2014}")
+            let location = session.location?.geocodedName.map(Self.csvEscape) ?? ""
+            let lat      = session.location.map { String($0.latitude) } ?? ""
+            let lon      = session.location.map { String($0.longitude) } ?? ""
+            let provider = Self.csvEscape(session.provider ?? "")
+            let roaming  = session.isRoaming.map { $0 ? "Yes" : "No" } ?? ""
+            let gen      = session.generation ?? ""
             let dataUsed: String
-            if let gb = s.dataUsedGB {
+            if let gb = session.dataUsedGB {
                 dataUsed = String(format: "%.3f", gb)
-            } else if s.isActive {
+            } else if session.isActive {
                 dataUsed = "Active"
             } else {
                 dataUsed = "?"
             }
-            let signal = s.averageSignal.map { String(format: "%.1f", $0) } ?? ""
+            let signal = session.averageSignal.map { String(format: "%.1f", $0) } ?? ""
+
             return "\(date),\(duration),\(location),\(lat),\(lon),\(provider),\(roaming),\(gen),\(dataUsed),\(signal)"
         }
         return ([header] + rows).joined(separator: "\n")
@@ -101,7 +118,7 @@ final class SessionStore: ObservableObject {
         return "\(s)s"
     }
 
-    private func csvEscape(_ str: String) -> String {
+    private static func csvEscape(_ str: String) -> String {
         guard str.contains(",") || str.contains("\"") || str.contains("\n") else { return str }
         return "\"" + str.replacingOccurrences(of: "\"", with: "\"\"") + "\""
     }
@@ -116,8 +133,9 @@ final class SessionStore: ObservableObject {
     private func trimIfNeeded() -> Bool {
         let limit = ConfigStore.shared.maxSessionCount
         guard limit > 0 else { return false }
-        let triggerAt  = Int(Double(limit) * 1.1)   // compact when 10% over limit
+        let triggerAt = Int(Double(limit) * 1.1)   // compact when 10% over limit
         guard sessions.count > triggerAt else { return false }
+
         let removeCount = max(1, Int(Double(limit) * 0.1))  // drop 10% of limit
         let toRemove = Set(
             sessions
@@ -127,6 +145,7 @@ final class SessionStore: ObservableObject {
                 .map { $0.id }
         )
         guard !toRemove.isEmpty else { return false }
+
         sessions.removeAll { toRemove.contains($0.id) }
         return true
     }
@@ -135,9 +154,6 @@ final class SessionStore: ObservableObject {
 
     private func load() {
         guard let content = try? String(contentsOf: fileURL, encoding: .utf8) else { return }
-
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
 
         // Read every non-empty line; last occurrence per UUID wins (WAL semantics).
         var byID: [UUID: SessionRecord] = [:]
@@ -151,8 +167,6 @@ final class SessionStore: ObservableObject {
 
     /// Appends one JSON line for `session` — never rewrites the whole file.
     private func appendLine(_ session: SessionRecord) {
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
         guard var line = try? encoder.encode(session) else { return }
         line.append(0x0A)  // \n
 
@@ -161,16 +175,14 @@ final class SessionStore: ObservableObject {
             return
         }
         guard let handle = try? FileHandle(forWritingTo: fileURL) else { return }
-        defer { handle.closeFile() }
-        handle.seekToEndOfFile()
-        handle.write(line)
+        defer { try? handle.close() }
+        _ = try? handle.seekToEnd()
+        try? handle.write(contentsOf: line)
     }
 
     /// Rewrites the JSONL file with the current deduplicated session list and
     /// triggers a background cluster cache rebuild (since rows were deleted).
     private func compact() {
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
         let data = sessions
             .compactMap { try? encoder.encode($0) }
             .reduce(into: Data()) { $0 += $1; $0.append(0x0A) }
