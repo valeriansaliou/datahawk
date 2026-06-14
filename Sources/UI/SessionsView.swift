@@ -349,6 +349,7 @@ struct SessionListView: View {
     @Binding var selectedID: UUID?
 
     @ObservedObject private var config = ConfigStore.shared
+    @ObservedObject private var state = AppState.shared
     @State private var searchText = ""
     @State private var sortOrder: [KeyPathComparator<SessionRecord>] = [
         KeyPathComparator(\.startDate, order: .reverse)
@@ -471,16 +472,14 @@ struct SessionListView: View {
             .width(min: 60, ideal: 70, max: 80)
 
             TableColumn("Data Used", value: \.dataUsedForSort) { s in
-                if let gb = s.dataUsedGB {
-                    Text(String(format: "%.2f GB", gb)).font(cellFont)
-                } else if s.isActive {
-                    Text("\u{2014}").font(cellFont).foregroundStyle(.secondary)
-                } else {
-                    Text("?")
-                        .font(cellFont)
-                        .foregroundStyle(.tertiary)
-                        .help("Billing cycle may have rolled over during this session.")
-                }
+                let gb: Double? = s.isActive
+                    ? { () -> Double? in
+                        guard let cur = state.metrics?.dataUsedGB,
+                              let start = s.dataStartGB, cur >= start else { return nil }
+                        return cur - start
+                    }()
+                    : s.dataUsedGB
+                Text(String(format: "%.2f GB", gb ?? 0)).font(cellFont)
             }
             .width(min: 64, ideal: 80)
 
