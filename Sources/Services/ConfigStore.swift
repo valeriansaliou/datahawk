@@ -16,11 +16,13 @@ final class ConfigStore: ObservableObject {
 
     // MARK: - UserDefaults keys
 
-    private let hotspotsKey           = "datahawk.hotspots.v1"
-    private let refreshIntervalKey    = "datahawk.refreshInterval.v1"
-    private let launchAtLoginKey      = "datahawk.launchAtLogin.v1"
-    private let notifyBatteryLowKey   = "datahawk.notifyBatteryLow.v1"
-    private let notifyNoServiceKey    = "datahawk.notifyNoService.v1"
+    private let hotspotsKey              = "datahawk.hotspots.v1"
+    private let refreshIntervalKey       = "datahawk.refreshInterval.v1"
+    private let launchAtLoginKey         = "datahawk.launchAtLogin.v1"
+    private let notifyBatteryLowKey      = "datahawk.notifyBatteryLow.v1"
+    private let notifyNoServiceKey       = "datahawk.notifyNoService.v1"
+    private let recordSessionHistoryKey  = "datahawk.recordSessionHistory.v1"
+    private let maxSessionCountKey       = "datahawk.maxSessionCount.v1"
 
     // MARK: - Published state
 
@@ -55,6 +57,22 @@ final class ConfigStore: ObservableObject {
     /// Whether to notify when there is no cellular service.
     @Published var notifyNoService: Bool = false {
         didSet { UserDefaults.standard.set(notifyNoService, forKey: notifyNoServiceKey) }
+    }
+
+    /// Whether to record connection sessions (location, signal, data usage).
+    /// Opt-out; defaults to true.
+    @Published var recordSessionHistory: Bool = true {
+        didSet { UserDefaults.standard.set(recordSessionHistory, forKey: recordSessionHistoryKey) }
+    }
+
+    /// Maximum number of sessions to retain. Oldest completed sessions are
+    /// dropped automatically when this limit is exceeded. Defaults to 10,000.
+    @Published var maxSessionCount: Int = 10_000 {
+        didSet {
+            let clamped = max(100, min(1_000_000, maxSessionCount))
+            if clamped != maxSessionCount { maxSessionCount = clamped; return }
+            UserDefaults.standard.set(maxSessionCount, forKey: maxSessionCountKey)
+        }
     }
 
     /// Polling interval in seconds (clamped to 5–3600). Persisted to
@@ -141,5 +159,14 @@ final class ConfigStore: ObservableObject {
         // Notification prefs (default false — no permission requested at launch).
         notifyBatteryLow = UserDefaults.standard.bool(forKey: notifyBatteryLowKey)
         notifyNoService  = UserDefaults.standard.bool(forKey: notifyNoServiceKey)
+
+        // Session history (opt-out, default true — respect stored preference if set).
+        if UserDefaults.standard.object(forKey: recordSessionHistoryKey) != nil {
+            recordSessionHistory = UserDefaults.standard.bool(forKey: recordSessionHistoryKey)
+        }
+
+        // Max session count (0 means "never stored" — keep default of 10,000).
+        let storedMax = UserDefaults.standard.integer(forKey: maxSessionCountKey)
+        if storedMax > 0 { maxSessionCount = storedMax }
     }
 }

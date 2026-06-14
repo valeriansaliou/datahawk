@@ -41,7 +41,8 @@ SWIFT_FLAGS := \
   -framework ServiceManagement \
   -framework Combine \
   -framework SwiftUI \
-  -framework CoreLocation
+  -framework CoreLocation \
+  -framework MapKit
 
 # All Swift sources, sorted for deterministic compilation order
 SOURCES    := $(shell find Sources -name "*.swift" | sort)

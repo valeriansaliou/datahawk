@@ -40,10 +40,12 @@ final class WiFiQRWindowController: NSObject, NSWindowDelegate {
             defer: false
         )
 
-        win.title                 = "Connect to WiFi"
-        win.contentViewController = hosting
-        win.isReleasedWhenClosed  = false
-        win.delegate              = self
+        win.title                        = "Connect to WiFi"
+        win.titleVisibility              = .visible
+        win.titlebarAppearsTransparent   = false
+        win.contentViewController        = hosting
+        win.isReleasedWhenClosed         = false
+        win.delegate                     = self
         win.center()
         win.makeKeyAndOrderFront(nil)
 

@@ -40,9 +40,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Start watching notification prefs. Permission is only requested
         // when the user enables at least one alert in Settings.
         NotificationManager.shared.start()
+
+        // Start session tracker. Only records data when the user opts in via
+        // Settings → Options → Record session history.
+        SessionTracker.shared.start()
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        SessionTracker.shared.closeOnTermination()
         statusBarController.stop()
     }
 

@@ -392,6 +392,7 @@ struct UpdateAvailableSection: View {
 /// and a QR code button (shows a WiFi sharing sheet).
 struct AdminButtonSection: View {
     @ObservedObject var state: AppState
+    @ObservedObject private var config = ConfigStore.shared
 
     var body: some View {
         HStack(spacing: 8) {
@@ -404,6 +405,17 @@ struct AdminButtonSection: View {
             }
             .controlSize(.regular)
             .disabled(state.metrics?.adminURL == nil)
+
+            if config.recordSessionHistory {
+                Button(action: openSessions) {
+                    Image(systemName: "map")
+                }
+                .controlSize(.regular)
+                .help("Show session history")
+                .onHover { inside in
+                    if inside { NSCursor.pointingHand.push() } else { NSCursor.pop() }
+                }
+            }
 
             Button(action: openWiFiQR) {
                 Image(systemName: "qrcode")
@@ -424,6 +436,11 @@ struct AdminButtonSection: View {
 
         NotificationCenter.default.post(name: .datahawkHidePopover, object: nil)
         NSWorkspace.shared.open(url)
+    }
+
+    private func openSessions() {
+        NotificationCenter.default.post(name: .datahawkHidePopover, object: nil)
+        SessionsWindowController.shared.show()
     }
 
     private func openWiFiQR() {

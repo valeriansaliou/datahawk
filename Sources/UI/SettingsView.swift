@@ -22,7 +22,7 @@ struct SettingsView: View {
             AboutTab()
                 .tabItem { Label("About", systemImage: "info.circle") }
         }
-        .frame(width: 380, height: 420)
+        .frame(width: 380, height: 500)
     }
 }
 
@@ -182,6 +182,31 @@ private struct OptionsTab: View {
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
+            }
+
+            Section {
+                Toggle("Record session history", isOn: $store.recordSessionHistory)
+
+                HStack {
+                    Text("History maximum size")
+                    Spacer()
+                    Stepper(value: $store.maxSessionCount, in: 100...1_000_000, step: 1_000) {
+                        EmptyView()
+                    }
+                    .labelsHidden()
+                    .disabled(!store.recordSessionHistory)
+                    Text("\(store.maxSessionCount)")
+                        .monospacedDigit()
+                        .frame(width: 58, alignment: .trailing)
+                    Text("sessions")
+                }
+                .opacity(store.recordSessionHistory ? 1 : 0.35)
+            } header: {
+                Text("Session History")
+            } footer: {
+                Text("Tracks each hotspot connection with location, signal quality, and data usage. When the limit is reached, the oldest completed sessions are deleted automatically.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
             }
 
             Section {
