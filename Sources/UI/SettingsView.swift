@@ -190,7 +190,7 @@ private struct OptionsTab: View {
                 HStack {
                     Text("History maximum size")
                     Spacer()
-                    Stepper(value: $store.maxSessionCount, in: 100...1_000_000, step: 1_000) {
+                    Stepper(value: $store.maxSessionCount, in: 1_000...100_000, step: 1_000) {
                         EmptyView()
                     }
                     .labelsHidden()

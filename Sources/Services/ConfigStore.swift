@@ -69,7 +69,8 @@ final class ConfigStore: ObservableObject {
     /// dropped automatically when this limit is exceeded. Defaults to 10,000.
     @Published var maxSessionCount: Int = 10_000 {
         didSet {
-            let clamped = max(100, min(1_000_000, maxSessionCount))
+            let rounded = (maxSessionCount / 1_000) * 1_000
+            let clamped = max(1_000, min(100_000, rounded))
             if clamped != maxSessionCount { maxSessionCount = clamped; return }
             UserDefaults.standard.set(maxSessionCount, forKey: maxSessionCountKey)
         }
