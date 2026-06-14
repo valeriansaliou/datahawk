@@ -61,4 +61,10 @@ final class SessionsWindowController: NSObject, NSWindowDelegate {
 
         self.window = win
     }
+
+    // MARK: - NSWindowDelegate
+
+    func windowWillClose(_ notification: Notification) {
+        window = nil
+    }
 }
