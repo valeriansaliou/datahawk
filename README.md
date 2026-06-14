@@ -55,7 +55,7 @@ _A NETGEAR Nighthawk M3. DataHawk is extensible, you can easily add support for 
   - Stores all your past hotspot sessions with connection quality metadata and location
   - See all your measured signal quality on a map so that you know which coffee shop has the best signal!
   - View all past sessions in a table format and export to CSV
-  - This feature can be disabled, the map data is stored locally
+  - _This feature can be disabled if you do not like it_
 - ✅ **WiFi QR share** — option-click the icon (or use the QR button) to show a scannable QR code for joining the router's WiFi
 
 ## Install
