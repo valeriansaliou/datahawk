@@ -44,7 +44,8 @@ struct ErrorBannerSection: View {
 /// Shown when no known hotspot is in range. Prompts the user to add a router
 /// in Settings, and displays the detected BSSID for easy copy-paste.
 struct DisconnectedSection: View {
-    @ObservedObject private var state = AppState.shared
+    @ObservedObject private var state  = AppState.shared
+    @ObservedObject private var config = ConfigStore.shared
     @State private var copied = false
 
     var body: some View {
@@ -71,6 +72,21 @@ struct DisconnectedSection: View {
                 Text(" to get started.")
                     .font(.caption)
                     .foregroundColor(.secondary)
+            }
+
+            if config.recordSessionHistory && !SessionStore.shared.sessions.isEmpty {
+                Button {
+                    NotificationCenter.default.post(name: .datahawkHidePopover, object: nil)
+                    SessionsWindowController.shared.show()
+                } label: {
+                    Label("See Past Sessions", systemImage: "map")
+                        .font(.system(size: 11, weight: .medium))
+                }
+                .controlSize(.small)
+                .padding(.top, 6)
+                .onHover { inside in
+                    if inside { NSCursor.pointingHand.push() } else { NSCursor.pop() }
+                }
             }
 
             // Show the raw BSSID so the user can copy it into Settings.
