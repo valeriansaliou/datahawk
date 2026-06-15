@@ -321,10 +321,10 @@ Key JSON paths used in `extractMetrics(from:baseURL:)`:
 |---|---|---|
 | Network type | `wwan.connectionText` (primary), `wwan.currentNWserviceType` / `wwan.currentPSserviceType` (fallback) | Parsed via `parseNetworkType()` |
 | Signal bars | `wwan.signalStrength.bars` | Clamped 0–5 |
-| Carrier | `sim.SPN` (primary), `wwan.registerNetworkDisplay` (fallback) | |
-| Roaming | `wwan.roamingType` | Case-insensitive compare to "Home" |
-| Data used (bytes) | `wwan.dataUsage.generic.dataTransferred` (billing), `wwan.dataTransferred.totalb` / `rxb+txb` (session fallback) | Session values can be strings |
-| Data limit | `wwan.dataUsage.generic.billingCycleLimit` | Conditional on `billingCycleLimitEnabled` or `billingCycleLimitRoaming` |
+| Carrier | `wwan.registerNetworkDisplay` (primary), `sim.SPN` (fallback) | Primary reflects active (roaming) network |
+| Roaming | `wwan.roaming` | Plain boolean; `wwan.roamingType` is unreliable (always "Home") |
+| Data used (bytes) | `wwan.dataUsage.generic.dataTransferred` (billing, home), `wwan.dataUsage.generic.dataTransferredRoaming` (billing, roaming), `wwan.dataTransferred.totalb` / `rxb+txb` (session fallback) | Session values can be strings |
+| Data limit | `wwan.dataUsage.generic.billingCycleLimit` (home), `wwan.dataUsage.generic.billingCycleLimitRoaming` (roaming) | Conditional on `billingCycleLimitEnabled` (home) or `billingCycleLimitRoamingEnabled` (roaming) |
 | Data warning % | `wwan.dataUsage.generic.usageHighWarning` | 0 treated as unconfigured |
 | Battery state | `power.batteryState` | `"NoBattery"` = USB-C only device |
 | Battery % | `power.battChargeLevel` | |

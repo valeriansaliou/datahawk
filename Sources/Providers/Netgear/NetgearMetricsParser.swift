@@ -37,19 +37,19 @@ extension NetgearProvider {
         let bars = Int(numberValue(model, "wwan.signalStrength.bars") ?? 0)
 
         // -- Carrier name -----------------------------------------------------
-        // sim.SPN is from the physical SIM and is the most authoritative.
+        // wwan.registerNetworkDisplay reflects the active (possibly roaming) network;
+        // sim.SPN is the home-SIM name and used as a fallback when not roaming.
         let provider = stringValue(
             model,
-            "sim.SPN",
-            "wwan.registerNetworkDisplay"
+            "wwan.registerNetworkDisplay",
+            "sim.SPN"
         ) ?? "Unknown"
 
         // -- Roaming ----------------------------------------------------------
-        // roamingType == "Home" means not roaming; anything else counts.
+        // wwan.roaming is a plain boolean; wwan.roamingType is unreliable (always "Home").
         // Resolved early because parseDataUsage needs it to choose the right
         // billing-cycle limit flag.
-        let roamingType = stringValue(model, "wwan.roamingType") ?? "Home"
-        let isRoaming   = roamingType.caseInsensitiveCompare("Home") != .orderedSame
+        let isRoaming = boolValue(model, "wwan.roaming") ?? false
 
         // -- SIM lock ---------------------------------------------------------
         let simStatus   = stringValue(model, "sim.status") ?? ""
@@ -192,23 +192,25 @@ extension NetgearProvider {
         let bytesPerGB: Double = 1_073_741_824  // 1024^3
 
         // Source 1: billing-cycle counters.
+        let dataTransferredKey = isRoaming ? "dataTransferredRoaming" : "dataTransferred"
         if let generic = nestedValue(model, "wwan.dataUsage.generic") as? [String: Any],
-           let usedBytes = doubleValue(generic["dataTransferred"]) {
+           let usedBytes = doubleValue(generic[dataTransferredKey]) {
 
             let usedGB  = usedBytes / bytesPerGB
             var limitGB: Double? = nil
 
-            // When roaming, the router enforces its roaming cap; otherwise
-            // the standard billing-cycle limit flag applies.
-            let limitKey = isRoaming
-                ? "billingCycleLimitRoaming"
-                : "billingCycleLimitEnabled"
-            let limitEnabled = (generic[limitKey] as? Bool) ?? false
-            let limitValid   = (generic["dataLimitValid"] as? Bool) ?? false
+            let limitValidKey = isRoaming ? "dataLimitRoamingValid" : "dataLimitValid"
+            let limitValid    = (generic[limitValidKey] as? Bool) ?? false
 
-            if limitEnabled && limitValid,
-               let lb = doubleValue(generic["billingCycleLimit"]) {
-                limitGB = lb / bytesPerGB
+            if limitValid {
+                let limitEnabled = isRoaming
+                    ? (generic["billingCycleLimitRoamingEnabled"] as? Bool) ?? false
+                    : (generic["billingCycleLimitEnabled"] as? Bool) ?? false
+                let limitValueKey = isRoaming ? "billingCycleLimitRoaming" : "billingCycleLimit"
+
+                if limitEnabled, let lb = doubleValue(generic[limitValueKey]) {
+                    limitGB = lb / bytesPerGB
+                }
             }
 
             // usageHighWarning is 0–100; treat 0 as "not configured".
