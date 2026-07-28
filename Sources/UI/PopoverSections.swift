@@ -415,12 +415,16 @@ struct AdminButtonSection: View {
             Button(action: openAdminUI) {
                 HStack {
                     Image(systemName: "safari")
-                    Text("Open Admin UI")
+                    Text("Admin UI")
                 }
                 .frame(maxWidth: .infinity)
             }
             .controlSize(.regular)
             .disabled(state.metrics?.adminURL == nil)
+            .onHover { inside in
+                guard state.metrics?.adminURL != nil else { return }
+                if inside { NSCursor.pointingHand.push() } else { NSCursor.pop() }
+            }
 
             if config.recordSessionHistory {
                 Button(action: openSessions) {
@@ -439,6 +443,31 @@ struct AdminButtonSection: View {
             .controlSize(.regular)
             .disabled(state.metrics?.wifiEnabled != true)
             .help("Share WiFi via QR code")
+            .onHover { inside in
+                guard state.metrics?.wifiEnabled == true else { return }
+                if inside { NSCursor.pointingHand.push() } else { NSCursor.pop() }
+            }
+
+            Button(action: openSMS) {
+                Image(systemName: "text.bubble")
+            }
+            .controlSize(.regular)
+            .disabled(state.metrics?.smsReady != true)
+            .help(state.metrics?.smsReady == true ? "Show text messages" : "Text messages not supported")
+            .onHover { inside in
+                guard state.metrics?.smsReady == true else { return }
+                if inside { NSCursor.pointingHand.push() } else { NSCursor.pop() }
+            }
+            .overlay(alignment: .topTrailing) {
+                if let unread = state.metrics?.smsUnreadCount, unread > 0 {
+                    Text(unread > 9 ? "9+" : "\(unread)")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundColor(.white)
+                        .frame(width: 14, height: 14)
+                        .background(Circle().fill(Color.red))
+                        .offset(x: 8, y: -6)
+                }
+            }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
@@ -457,6 +486,11 @@ struct AdminButtonSection: View {
     private func openSessions() {
         NotificationCenter.default.post(name: .datahawkHidePopover, object: nil)
         SessionsWindowController.shared.show()
+    }
+
+    private func openSMS() {
+        NotificationCenter.default.post(name: .datahawkHidePopover, object: nil)
+        SMSWindowController.shared.show()
     }
 
     private func openWiFiQR() {

@@ -9,6 +9,18 @@
 
 import Foundation
 
+/// `sms.msgs[].rxTime` is sometimes a raw Unix epoch seconds value (modem
+/// RTC, needs drift correction — see `parseSMSMessages`), and sometimes an
+/// already-correct, pre-formatted UTC timestamp string like
+/// "07/26/26 11:53:59 AM" straight from the router.
+private let smsRxTimeFormatter: DateFormatter = {
+    let f = DateFormatter()
+    f.dateFormat = "MM/dd/yy hh:mm:ss a"
+    f.locale = Locale(identifier: "en_US_POSIX")
+    f.timeZone = TimeZone(identifier: "UTC")
+    return f
+}()
+
 // MARK: - Metrics extraction
 
 extension NetgearProvider {
@@ -105,6 +117,12 @@ extension NetgearProvider {
         let routerTemperature  = numberValue(model, "general.devTemperature")
         let deviceTempCritical = boolValue(model, "power.deviceTempCritical") ?? false
 
+        // -- SMS ----------------------------------------------------------------
+        let smsReady       = boolValue(model, "sms.ready") ?? false
+        let smsUnreadCount = Int(numberValue(model, "sms.unreadMsgs") ?? 0)
+        let smsTotalCount  = Int(numberValue(model, "sms.msgCount") ?? 0)
+        let smsMessages    = parseSMSMessages(model)
+
         // -- Assemble ---------------------------------------------------------
 
         return RouterMetrics(
@@ -131,8 +149,68 @@ extension NetgearProvider {
             uptimeSeconds:            uptimeSeconds,
             routerTemperature:        routerTemperature,
             useMetricSystem:          useMetricSystem,
-            deviceTempCritical:       deviceTempCritical
+            deviceTempCritical:       deviceTempCritical,
+            smsReady:                 smsReady,
+            smsUnreadCount:           smsUnreadCount,
+            smsTotalCount:            smsTotalCount,
+            smsMessages:              smsMessages
         )
+    }
+}
+
+// MARK: - SMS parser
+
+extension NetgearProvider {
+
+    /// Parses `sms.msgs`. The router pads the array with a trailing empty
+    /// object (`{}`) — entries without an "id" key are discarded.
+    ///
+    /// The modem's RTC is sometimes unsynced when it stamps incoming SMS,
+    /// so `rxTime` can be years off. `general.currTime` reports the modem's
+    /// own idea of "now" — `realNow - currTime` is the clock drift, and
+    /// adding that same drift to `rxTime` recovers the true rxDate while
+    /// preserving the message's real age (`currTime - rxTime`).
+    func parseSMSMessages(_ model: [String: Any]) -> [SMSMessage] {
+        // Cast element-by-element rather than the whole array at once: the
+        // router sometimes pads this array with malformed/non-object entries
+        // (e.g. a JSON `null` instead of `{}`), and a single bad element
+        // would otherwise fail the whole-array cast and silently drop every
+        // message.
+        guard let rawArray = nestedValue(model, "sms.msgs") as? [Any] else {
+            return []
+        }
+        let raw = rawArray.compactMap { $0 as? [String: Any] }
+
+        let modemNow = stringToDouble(nestedValue(model, "general.currTime"))
+        let realNow  = Date().timeIntervalSince1970
+        let drift    = modemNow.map { realNow - $0 } ?? 0
+
+        return raw.compactMap { entry -> SMSMessage? in
+            guard let rawID = entry["id"] else { return nil }
+
+            // A "0" or unparseable rxTime means the router has no real
+            // receive timestamp (seen on carrier-injected welcome SMS).
+            let rxSeconds = stringToDouble(entry["rxTime"]) ?? 0
+            let rxDate: Date?
+            if rxSeconds > 0 {
+                // Raw modem epoch seconds — RTC may be unsynced, correct for drift.
+                rxDate = Date(timeIntervalSince1970: rxSeconds + drift)
+            } else if let rawString = entry["rxTime"] as? String,
+                      let parsed = smsRxTimeFormatter.date(from: rawString) {
+                // Already a real, pre-formatted UTC timestamp from the router.
+                rxDate = parsed
+            } else {
+                rxDate = nil
+            }
+
+            return SMSMessage(
+                id:      String(describing: rawID),
+                rxDate:  rxDate,
+                text:    entry["text"] as? String ?? "",
+                sender:  entry["sender"] as? String ?? "",
+                isRead:  (entry["read"] as? Bool) ?? false
+            )
+        }
     }
 }
 

@@ -134,4 +134,18 @@ struct RouterMetrics {
 
     /// `true` when the router reports a critical device temperature.
     var deviceTempCritical: Bool
+
+    // MARK: - SMS
+
+    /// `true` when the router's SMS feature is supported and ready to use.
+    var smsReady: Bool
+
+    /// Number of unread messages, straight from the router (free — no extra fetch).
+    var smsUnreadCount: Int
+
+    /// Total number of messages stored on the router.
+    var smsTotalCount: Int
+
+    /// Parsed message list, newest first is not guaranteed — sort at display time.
+    var smsMessages: [SMSMessage]
 }
