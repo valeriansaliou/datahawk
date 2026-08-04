@@ -273,7 +273,7 @@ Cluster centre coordinates are the first session that founded the cluster; the c
 
 Version comparison: `versionComponents(_:)` strips a leading `v`, splits on `.`, and compares element-wise (missing components treated as 0).
 
-`UpdateInstaller` / `UpdaterWindowController.shared` runs the install flow: shows a progress window, downloads the DMG via `URLSessionDownloadTask` delegate callbacks, then on completion mounts via `hdiutil attach`, copies `.app` to a `DataHawk.staged.app` sibling, swaps in via `FileManager.replaceItemAt`, detaches the volume, and prompts the user to restart. Restart spawns a detached `/bin/sh -c 'sleep 0.5 && open <bundle>'` then calls `NSApp.terminate`.
+`UpdateInstaller` / `UpdaterWindowController.shared` runs the install flow: shows a progress window, downloads the DMG via `URLSessionDownloadTask` delegate callbacks, then on completion mounts via `hdiutil attach`, copies `.app` to a `DataHawk.staged.app` sibling, **verifies the staged copy** (`codesign --verify --deep --strict` must pass and its `CFBundleIdentifier` must match the running app's — the Team ID is deliberately not pinned), swaps in via `FileManager.replaceItemAt`, detaches the volume, and prompts the user to restart. Restart spawns a detached `/bin/sh -c 'sleep 0.5 && open <bundle>'` then calls `NSApp.terminate`.
 
 ---
 

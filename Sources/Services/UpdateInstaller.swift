@@ -250,6 +250,15 @@ final class UpdaterWindowController: NSObject, NSWindowDelegate, URLSessionDownl
             return
         }
 
+        // Verify the staged copy (not the DMG contents — avoids a
+        // time-of-check/time-of-use gap) before it replaces the running app.
+        guard verifyStagedApp(at: stagedApp) else {
+            try? FileManager.default.removeItem(at: stagedApp)
+            cleanup(dmgPath: dmgPath, mountPoint: mountPoint)
+            reportFailure()
+            return
+        }
+
         do {
             _ = try FileManager.default.replaceItemAt(destApp, withItemAt: stagedApp)
         } catch {
@@ -310,6 +319,45 @@ final class UpdaterWindowController: NSObject, NSWindowDelegate, URLSessionDownl
                 self.start(downloadURL: url)
             }
         }
+    }
+
+    // MARK: - Update verification
+
+    /// Gate before the staged app replaces the running bundle. Without it,
+    /// anything that lands in the DMG (compromised release, tampered asset)
+    /// would be installed and re-launched as-is. Two checks:
+    ///
+    ///   1. `codesign --verify --deep --strict` must pass — the bundle
+    ///      carries a valid, untampered code signature. The Team ID is
+    ///      deliberately NOT pinned: it may legitimately change over time.
+    ///   2. The staged app's CFBundleIdentifier must match the running
+    ///      app's, so a validly-signed but unrelated app can't be swapped in.
+    private func verifyStagedApp(at appURL: URL) -> Bool {
+        let proc = Process()
+        let outPipe = Pipe()
+
+        proc.executableURL  = URL(fileURLWithPath: "/usr/bin/codesign")
+        proc.arguments      = ["--verify", "--deep", "--strict", appURL.path]
+        proc.standardOutput = outPipe
+        proc.standardError  = outPipe
+
+        guard (try? proc.run()) != nil else { return false }
+
+        // Drain before waiting (pipe-buffer deadlock — see shell()).
+        _ = outPipe.fileHandleForReading.readDataToEndOfFile()
+        proc.waitUntilExit()
+
+        guard proc.terminationStatus == 0 else { return false }
+
+        let infoURL = appURL.appendingPathComponent("Contents/Info.plist")
+
+        guard let info     = NSDictionary(contentsOf: infoURL),
+              let stagedID = info["CFBundleIdentifier"] as? String,
+              let ownID    = Bundle.main.bundleIdentifier else {
+            return false
+        }
+
+        return stagedID == ownID
     }
 
     // MARK: - Helpers
