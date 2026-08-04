@@ -24,11 +24,13 @@ protocol RouterProvider {
     /// Discards all cached authentication state (cookies, tokens, etc.) so
     /// that the next `fetchMetrics` call performs a full login.
     /// The default implementation is a no-op for providers that don't cache.
-    func flushAuth()
+    /// Async so that actor-based providers can satisfy it with an isolated
+    /// method (state mutation is then serialised with in-flight fetches).
+    func flushAuth() async
 }
 
 extension RouterProvider {
-    func flushAuth() {}
+    func flushAuth() async {}
 }
 
 // MARK: - Provider error

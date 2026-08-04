@@ -73,26 +73,31 @@ final class RouterService {
     func forceFullRefresh() {
         guard let config = currentConfig else { return }
 
-        // Discard cached cookies / tokens for this vendor.
-        providers[config.vendor]?.flushAuth()
-
         Task { @MainActor in
             AppState.shared.metrics    = nil
             AppState.shared.fetchError = nil
         }
 
-        // Restart the polling loop from scratch.
-        start(with: config)
+        // Restart the polling loop from scratch. The auth flush happens
+        // inside the new polling task, before its first fetch, so the flush
+        // and the re-authentication are strictly ordered on the provider.
+        start(with: config, flushAuthFirst: true)
     }
 
     /// Begins periodic polling for the given hotspot. Cancels any previous
     /// polling loop first so there is never more than one active loop.
-    func start(with config: HotspotConfig) {
+    /// When `flushAuthFirst` is set, cached provider auth state is discarded
+    /// before the first fetch (full re-login).
+    func start(with config: HotspotConfig, flushAuthFirst: Bool = false) {
         stop()
 
         currentConfig = config
 
         pollingTask = Task {
+            if flushAuthFirst {
+                await providers[config.vendor]?.flushAuth()
+            }
+
             // Immediate first fetch, then repeat at the configured interval.
             await fetchAndPublish(config: config)
 

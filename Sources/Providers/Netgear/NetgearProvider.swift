@@ -22,12 +22,14 @@
 
 import Foundation
 
-final class NetgearProvider: RouterProvider {
+actor NetgearProvider: RouterProvider {
 
     // MARK: - Cookie cache
 
     /// Auth cookies keyed by normalised base URL.
     /// Loaded from UserDefaults on init and persisted after every update.
+    /// Actor isolation serialises all access — the cache is mutated both by
+    /// fetch cycles (background tasks) and by flushAuth() (user-initiated).
     private var cachedCookies: [String: [HTTPCookie]] = [:]
 
     /// UserDefaults key for the serialised cookie cache.
