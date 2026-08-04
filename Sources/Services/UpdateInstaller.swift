@@ -117,7 +117,14 @@ final class UpdaterWindowController: NSObject, NSWindowDelegate, URLSessionDownl
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
 
-        guard let url = URL(string: downloadURL) else { return }
+        // A malformed URL previously bailed silently here, leaving the
+        // just-opened window stuck on an indeterminate "Downloading" bar
+        // forever. Route it through the standard failure alert instead.
+        guard let url = URL(string: downloadURL) else {
+            reportFailure()
+            return
+        }
+
         let s    = URLSession(configuration: .default, delegate: self, delegateQueue: nil)
         session  = s
         downloadTask = s.downloadTask(with: url)
