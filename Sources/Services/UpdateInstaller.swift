@@ -329,10 +329,16 @@ final class UpdaterWindowController: NSObject, NSWindowDelegate, URLSessionDownl
         proc.arguments      = args
         proc.standardOutput = pipe
         proc.standardError  = Pipe()
-        try? proc.run()
+
+        guard (try? proc.run()) != nil else { return "" }
+
+        // Drain stdout BEFORE waiting — see WiFiMonitor.bssidViaIPConfig:
+        // waiting first deadlocks if the child fills the pipe buffer.
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+
         proc.waitUntilExit()
-        return String(data: pipe.fileHandleForReading.readDataToEndOfFile(),
-                      encoding: .utf8) ?? ""
+
+        return String(data: data, encoding: .utf8) ?? ""
     }
 
     private func parseMountPoint(from output: String) -> String? {

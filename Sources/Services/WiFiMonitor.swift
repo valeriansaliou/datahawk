@@ -224,14 +224,17 @@ final class WiFiMonitor {
 
         guard (try? process.run()) != nil else { return nil }
 
+        // Drain stdout BEFORE waiting: if the child fills the ~64 KB pipe
+        // buffer while we sit in waitUntilExit(), it blocks on write and we
+        // block on wait — a deadlock. Reading to EOF first cannot deadlock
+        // (EOF arrives when the child exits and closes its end).
+        let data = outPipe.fileHandleForReading.readDataToEndOfFile()
+
         process.waitUntilExit()
 
         guard process.terminationStatus == 0 else { return nil }
 
-        let output = String(
-            data: outPipe.fileHandleForReading.readDataToEndOfFile(),
-            encoding: .utf8
-        ) ?? ""
+        let output = String(data: data, encoding: .utf8) ?? ""
 
         for line in output.components(separatedBy: "\n") {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
