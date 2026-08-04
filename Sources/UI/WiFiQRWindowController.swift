@@ -141,10 +141,27 @@ private struct WiFiQRView: View {
 
     // MARK: - QR code generation
 
+    /// Backslash-escapes the characters the WIFI: QR format treats as
+    /// special (`\`, `;`, `,`, `:`, `"`). Without this, an SSID or
+    /// passphrase containing e.g. a semicolon corrupts the payload — the
+    /// scanner truncates the value or misreads the following fields.
+    private func escapedField(_ field: String) -> String {
+        var out = ""
+
+        for char in field {
+            if char == "\\" || char == ";" || char == "," || char == ":" || char == "\"" {
+                out.append("\\")
+            }
+            out.append(char)
+        }
+
+        return out
+    }
+
     /// Generates a WiFi QR code using CoreImage's CIQRCodeGenerator.
-    /// Format: `WIFI:S:<ssid>;T:WPA;P:<passphrase>;;`
+    /// Format: `WIFI:S:<ssid>;T:WPA;P:<passphrase>;;` (fields escaped)
     private var qrImage: NSImage? {
-        let wifiString = "WIFI:S:\(ssid);T:WPA;P:\(passphrase);;"
+        let wifiString = "WIFI:S:\(escapedField(ssid));T:WPA;P:\(escapedField(passphrase));;"
 
         guard let data   = wifiString.data(using: .utf8),
               let filter = CIFilter(name: "CIQRCodeGenerator") else { return nil }
