@@ -9,7 +9,10 @@ import Foundation
 
 // MARK: - Provider protocol
 
-protocol RouterProvider {
+/// Refines Sendable: provider instances cross isolation domains (created on
+/// the main actor, awaited from polling tasks). Actor implementations are
+/// implicitly Sendable; a class implementation must be thread-safe.
+protocol RouterProvider: Sendable {
     /// Fetches the current metrics snapshot from the router.
     ///
     /// - Parameters:

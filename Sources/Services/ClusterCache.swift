@@ -12,18 +12,22 @@
 // On startup the cache is read from disk; if the file is absent or corrupt,
 // rebuild() is triggered automatically in the background.
 //
-// All mutations to `clusters` happen on the main thread.
+// @MainActor-isolated: all mutations to `clusters` are compiler-enforced to
+// the main actor. Only computeClusters() is nonisolated (pure function, runs
+// on a detached background task).
 
 import Foundation
 import Combine
 import CoreLocation
 
+@MainActor
 final class ClusterCache: ObservableObject {
     static let shared = ClusterCache()
 
     // MARK: - Cluster model
 
-    struct Cluster: Identifiable, Codable {
+    // nonisolated: plain value type, constructed off-main by computeClusters().
+    nonisolated struct Cluster: Identifiable, Codable, Sendable {
         /// ID of the most recent (representative) session in this cluster.
         /// Updates whenever a newer session joins — drives pin tap navigation.
         var id: UUID
@@ -50,7 +54,7 @@ final class ClusterCache: ObservableObject {
     private let fileURL: URL
 
     /// Two sessions within this many metres are merged into the same cluster.
-    static let distanceThreshold: CLLocationDistance = 20
+    nonisolated static let distanceThreshold: CLLocationDistance = 20
 
     /// Set when an update arrives while a rebuild is in flight. Triggers a
     /// follow-up rebuild so the in-flight delta isn't lost.
@@ -147,7 +151,7 @@ final class ClusterCache: ObservableObject {
 
     // MARK: - Cluster computation (pure, runs off main thread)
 
-    private static func computeClusters(from sessions: [SessionRecord]) -> [Cluster] {
+    private nonisolated static func computeClusters(from sessions: [SessionRecord]) -> [Cluster] {
         let withLoc = sessions
             .compactMap { session -> (SessionRecord, SessionLocation)? in
                 guard let loc = session.location else { return nil }

@@ -37,25 +37,25 @@ enum UpdateChecker {
         DispatchQueue.global().asyncAfter(deadline: .now() + 5) {
             fetchRelease { result in
                 guard case .newer(let url) = result else { return }
-                DispatchQueue.main.async { AppState.shared.updateDownloadURL = url }
+                Task { @MainActor in AppState.shared.updateDownloadURL = url }
             }
         }
     }
 
     /// Fetches the latest release and reports the result via callbacks on the
-    /// main thread.
+    /// main actor.
     ///
     /// - Parameters:
     ///   - onFound:    Called with the DMG download URL when a newer version exists.
     ///   - onUpToDate: Called when the running version is already the latest.
     ///   - onError:    Called when the network request or JSON parsing fails.
     static func checkForUpdatesManually(
-        onFound:    @escaping (_ downloadURL: String) -> Void,
-        onUpToDate: @escaping () -> Void,
-        onError:    @escaping () -> Void
+        onFound:    @escaping @MainActor (_ downloadURL: String) -> Void,
+        onUpToDate: @escaping @MainActor () -> Void,
+        onError:    @escaping @MainActor () -> Void
     ) {
         fetchRelease { result in
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 switch result {
                 case .newer(let url): onFound(url)
                 case .upToDate:       onUpToDate()
@@ -67,7 +67,7 @@ enum UpdateChecker {
 
     // MARK: - Shared fetch
 
-    private static func fetchRelease(_ completion: @escaping (ReleaseResult) -> Void) {
+    private static func fetchRelease(_ completion: @escaping @Sendable (ReleaseResult) -> Void) {
         guard let url = URL(string: releasesURL) else { completion(.error); return }
 
         let version = bundleShortVersion ?? "0"

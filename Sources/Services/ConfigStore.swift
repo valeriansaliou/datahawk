@@ -11,6 +11,7 @@ import Foundation
 import Combine
 import ServiceManagement
 
+@MainActor
 final class ConfigStore: ObservableObject {
     static let shared = ConfigStore()
 

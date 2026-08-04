@@ -12,13 +12,14 @@
 
 import CoreLocation
 
+@MainActor
 final class LocationPermissionManager: NSObject, CLLocationManagerDelegate {
     static let shared = LocationPermissionManager()
 
     private let manager = CLLocationManager()
 
-    /// Called on the main thread whenever the authorisation status changes.
-    var onAuthorizationChange: (() -> Void)?
+    /// Called on the main actor whenever the authorisation status changes.
+    var onAuthorizationChange: (@MainActor () -> Void)?
 
     // MARK: - Init
 
@@ -53,7 +54,12 @@ final class LocationPermissionManager: NSObject, CLLocationManagerDelegate {
 
     // MARK: - CLLocationManagerDelegate
 
-    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
-        onAuthorizationChange?()
+    // nonisolated to satisfy the protocol; the manager lives on the main run
+    // loop, so the callback arrives on the main actor (assumeIsolated traps
+    // if that invariant is ever violated).
+    nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        MainActor.assumeIsolated {
+            onAuthorizationChange?()
+        }
     }
 }

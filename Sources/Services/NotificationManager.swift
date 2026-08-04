@@ -8,9 +8,10 @@
 // so the user is only alerted once per event, not repeatedly while the
 // condition persists.
 
-import UserNotifications
+@preconcurrency import UserNotifications
 import Combine
 
+@MainActor
 final class NotificationManager {
     static let shared = NotificationManager()
 
@@ -32,7 +33,10 @@ final class NotificationManager {
         let signalEnabled = ConfigStore.shared.$notifyNoService.filter { $0 }
 
         Publishers.Merge(batteryEnabled, signalEnabled)
-            .sink { [weak self] _ in self?.requestAuthorizationIfNeeded() }
+            .sink { [weak self] _ in
+                // Fires synchronously on ConfigStore mutations (main-actor enforced).
+                MainActor.assumeIsolated { self?.requestAuthorizationIfNeeded() }
+            }
             .store(in: &cancellables)
     }
 
@@ -56,8 +60,11 @@ final class NotificationManager {
         AppState.shared.$metrics
             .scan((nil as RouterMetrics?, nil as RouterMetrics?)) { ($0.1, $1) }
             .sink { [weak self] previous, current in
-                self?.checkBatteryLow(previous: previous, current: current)
-                self?.checkNoSignal(previous: previous, current: current)
+                // Fires synchronously on AppState mutations (main-actor enforced).
+                MainActor.assumeIsolated {
+                    self?.checkBatteryLow(previous: previous, current: current)
+                    self?.checkNoSignal(previous: previous, current: current)
+                }
             }
             .store(in: &cancellables)
     }

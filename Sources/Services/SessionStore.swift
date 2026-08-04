@@ -8,11 +8,12 @@
 //   • Delete / trim                       → compact() rewrite   O(n)
 //
 // Updates append a new line for the same UUID; last occurrence wins on load.
-// All mutations must happen on the main thread.
+// @MainActor-isolated — all access is compiler-enforced to the main actor.
 
 import Foundation
 import Combine
 
+@MainActor
 final class SessionStore: ObservableObject {
     static let shared = SessionStore()
 

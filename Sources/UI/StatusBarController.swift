@@ -9,6 +9,7 @@ import AppKit
 import SwiftUI
 import Combine
 
+@MainActor
 final class StatusBarController: NSObject, NSPopoverDelegate {
 
     // MARK: - Properties
@@ -109,11 +110,14 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
             frameObserver = popoverWindow.observe(
                 \.frame, options: [.new]
             ) { [anchorX, anchorTop] win, change in
-                guard let newFrame = change.newValue else { return }
-                let expectedY = (anchorTop - newFrame.height).rounded()
+                // KVO on an NSWindow frame fires on the main thread.
+                MainActor.assumeIsolated {
+                    guard let newFrame = change.newValue else { return }
+                    let expectedY = (anchorTop - newFrame.height).rounded()
 
-                if abs(newFrame.origin.y - expectedY) > 0.5 {
-                    win.setFrameOrigin(NSPoint(x: anchorX, y: expectedY))
+                    if abs(newFrame.origin.y - expectedY) > 0.5 {
+                        win.setFrameOrigin(NSPoint(x: anchorX, y: expectedY))
+                    }
                 }
             }
 
@@ -136,14 +140,16 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
         clickMonitor = NSEvent.addGlobalMonitorForEvents(
             matching: [.leftMouseDown, .rightMouseDown]
         ) { [weak self] _ in
-            self?.hidePopover()
+            // NSEvent monitor handlers are invoked on the main thread.
+            MainActor.assumeIsolated { self?.hidePopover() }
         }
 
         // Local monitor: catches ESC key (not handled natively with
         // .applicationDefined behaviour).
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             if event.keyCode == 53 {  // 53 = Escape
-                self?.hidePopover()
+                // Local event monitors are invoked on the main thread.
+                MainActor.assumeIsolated { self?.hidePopover() }
                 return nil
             }
 
@@ -182,14 +188,17 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
             .combineLatest(AppState.shared.$metrics)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] state, metrics in
-                self?.applyIcon(
-                    state: state,
-                    networkType: metrics?.networkType,
-                    batteryLow: metrics?.isBatteryLow ?? false,
-                    highDataUsage: metrics?.isHighDataUsage ?? false,
-                    routerNotConnected: metrics.map { !$0.isRouterConnected } ?? false,
-                    simLocked: metrics?.isSimLocked ?? false
-                )
+                // Delivered on DispatchQueue.main — main-actor by definition.
+                MainActor.assumeIsolated {
+                    self?.applyIcon(
+                        state: state,
+                        networkType: metrics?.networkType,
+                        batteryLow: metrics?.isBatteryLow ?? false,
+                        highDataUsage: metrics?.isHighDataUsage ?? false,
+                        routerNotConnected: metrics.map { !$0.isRouterConnected } ?? false,
+                        simLocked: metrics?.isSimLocked ?? false
+                    )
+                }
             }
             .store(in: &cancellables)
     }
@@ -217,15 +226,18 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
             blinkTimer = Timer.scheduledTimer(
                 withTimeInterval: 0.1, repeats: true
             ) { [weak self] _ in
-                guard let self else { return }
+                // Timer scheduled on the main run loop — fires on the main actor.
+                MainActor.assumeIsolated {
+                    guard let self else { return }
 
-                self.blinkPhase += (2 * .pi) / ticksPerCycle
+                    self.blinkPhase += (2 * .pi) / ticksPerCycle
 
-                // Sine wave oscillates opacity between 0.4 and 1.0.
-                let t     = (sin(self.blinkPhase) + 1) / 2
-                let alpha = 0.4 + t * 0.6
+                    // Sine wave oscillates opacity between 0.4 and 1.0.
+                    let t     = (sin(self.blinkPhase) + 1) / 2
+                    let alpha = 0.4 + t * 0.6
 
-                self.statusItem.button?.image = IconRenderer.loadingIcon(alpha: alpha)
+                    self.statusItem.button?.image = IconRenderer.loadingIcon(alpha: alpha)
+                }
             }
 
         case .noHotspot, .disconnected, .failed, .connected:
@@ -255,7 +267,8 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.checkConnection()
+            // Delivered on OperationQueue.main — main-actor by definition.
+            MainActor.assumeIsolated { self?.checkConnection() }
         }
 
         NotificationCenter.default.addObserver(
@@ -263,7 +276,7 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.hidePopover()
+            MainActor.assumeIsolated { self?.hidePopover() }
         }
     }
 

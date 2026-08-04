@@ -6,15 +6,19 @@
 // poll cycle, requests a one-shot CLLocation fix at session open, and checks
 // for significant movement every 10 minutes to split sessions automatically.
 //
-// All AppState Combine subscriptions deliver on the main thread (AppState
-// mutations are always main-thread). The CLLocationManager is created on the
-// main thread (via the static singleton), so delegate callbacks also arrive
-// on the main thread. Timer callbacks fire on the main run loop.
+// @MainActor-isolated. AppState/ConfigStore Combine subscriptions deliver on
+// the main thread (their mutations are main-actor enforced), so sink bodies
+// re-enter isolation via MainActor.assumeIsolated. The CLLocationManager is
+// created on the main thread (via the static singleton), so delegate
+// callbacks also arrive on the main run loop — the nonisolated delegate
+// methods assume main-actor isolation the same way. Timer callbacks fire on
+// the main run loop.
 
 import Foundation
 import Combine
 import CoreLocation
 
+@MainActor
 final class SessionTracker: NSObject, CLLocationManagerDelegate {
     static let shared = SessionTracker()
 
@@ -48,17 +52,22 @@ final class SessionTracker: NSObject, CLLocationManagerDelegate {
         // an orphan. Stamp them with the current time as the best approximation.
         closeOrphanedSessions()
 
+        // The sinks below fire synchronously on @Published mutations, which
+        // are main-actor enforced — so assuming isolation in them is safe.
+
         // React to the feature toggle changing after launch.
         ConfigStore.shared.$recordSessionHistory
             .dropFirst()
             .sink { [weak self] enabled in
-                if enabled {
-                    // Just enabled — start a session immediately if connected.
-                    guard AppState.shared.connectionState == .connected else { return }
-                    self?.openSession()
-                } else {
-                    // Just disabled — close any running session before going dark.
-                    self?.closeActiveSession()
+                MainActor.assumeIsolated {
+                    if enabled {
+                        // Just enabled — start a session immediately if connected.
+                        guard AppState.shared.connectionState == .connected else { return }
+                        self?.openSession()
+                    } else {
+                        // Just disabled — close any running session before going dark.
+                        self?.closeActiveSession()
+                    }
                 }
             }
             .store(in: &cancellables)
@@ -67,7 +76,9 @@ final class SessionTracker: NSObject, CLLocationManagerDelegate {
         AppState.shared.$connectionState
             .scan((ConnectionState.noHotspot, ConnectionState.noHotspot)) { ($0.1, $1) }
             .sink { [weak self] previous, current in
-                self?.handleStateTransition(from: previous, to: current)
+                MainActor.assumeIsolated {
+                    self?.handleStateTransition(from: previous, to: current)
+                }
             }
             .store(in: &cancellables)
 
@@ -75,7 +86,9 @@ final class SessionTracker: NSObject, CLLocationManagerDelegate {
         AppState.shared.$metrics
             .compactMap { $0 }
             .sink { [weak self] metrics in
-                self?.recordSample(from: metrics)
+                MainActor.assumeIsolated {
+                    self?.recordSample(from: metrics)
+                }
             }
             .store(in: &cancellables)
     }
@@ -192,8 +205,11 @@ final class SessionTracker: NSObject, CLLocationManagerDelegate {
             withTimeInterval: locationCheckInterval,
             repeats: true
         ) { [weak self] _ in
-            guard let self, self.isLocationAuthorized else { return }
-            self.locationManager.requestLocation()
+            // Timer scheduled on the main run loop — fires on the main actor.
+            MainActor.assumeIsolated {
+                guard let self, self.isLocationAuthorized else { return }
+                self.locationManager.requestLocation()
+            }
         }
     }
 
@@ -205,9 +221,26 @@ final class SessionTracker: NSObject, CLLocationManagerDelegate {
 
     // MARK: - CLLocationManagerDelegate
 
-    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+    // The delegate methods are nonisolated to satisfy the protocol, but the
+    // manager's run loop is the main one, so re-entering main-actor isolation
+    // is safe (assumeIsolated traps if that invariant is ever violated).
+
+    nonisolated func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let fix = locations.last else { return }
 
+        MainActor.assumeIsolated {
+            handleLocationFix(fix)
+        }
+    }
+
+    nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+        MainActor.assumeIsolated {
+            isAwaitingFirstFix = false
+        }
+        print("[DataHawk] Session location fix failed: \(error.localizedDescription)")
+    }
+
+    private func handleLocationFix(_ fix: CLLocation) {
         if isAwaitingFirstFix {
             isAwaitingFirstFix = false
             lastKnownLocation = fix
@@ -240,16 +273,11 @@ final class SessionTracker: NSObject, CLLocationManagerDelegate {
         }
     }
 
-    func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
-        isAwaitingFirstFix = false
-        print("[DataHawk] Session location fix failed: \(error.localizedDescription)")
-    }
-
     // MARK: - Reverse geocoding
 
     // CLGeocoder is deprecated in macOS 26 in favour of MKReverseGeocodingRequest.
     // Migration deferred until the replacement API stabilises post-WWDC 2025.
-    private func geocode(_ location: CLLocation, completion: @escaping (String?) -> Void) {
+    private func geocode(_ location: CLLocation, completion: @escaping @MainActor (String?) -> Void) {
         CLGeocoder().reverseGeocodeLocation(location) { placemarks, _ in
             let name = placemarks?.first.map { placemark in
                 [placemark.locality, placemark.administrativeArea, placemark.country]
@@ -257,7 +285,7 @@ final class SessionTracker: NSObject, CLLocationManagerDelegate {
                     .filter { !$0.isEmpty }
                     .joined(separator: ", ")
             }
-            DispatchQueue.main.async { completion(name) }
+            Task { @MainActor in completion(name) }
         }
     }
 }

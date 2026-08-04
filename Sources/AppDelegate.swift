@@ -7,6 +7,7 @@
 
 import AppKit
 
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusBarController: StatusBarController!
 
@@ -29,7 +30,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Request permission now; once granted, re-check the active connection
         // so the hotspot is recognised without waiting for a WiFi event.
         LocationPermissionManager.shared.onAuthorizationChange = { [weak self] in
-            DispatchQueue.main.async { self?.statusBarController.checkConnection() }
+            self?.statusBarController.checkConnection()
         }
 
         LocationPermissionManager.shared.requestIfNeeded()

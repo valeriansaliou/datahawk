@@ -3,12 +3,15 @@
 //
 // Drives the periodic polling of the active hotspot's router API. Call
 // `start(with:)` when a known hotspot is detected and `stop()` on
-// disconnect. All AppState mutations happen on the main actor.
+// disconnect. The service is @MainActor-isolated: the polling Task inherits
+// the main actor, so AppState/ConfigStore access is direct and the main
+// thread is only ever suspended (never blocked) across provider awaits.
 
 import Foundation
 
 // MARK: - Router service
 
+@MainActor
 final class RouterService {
     static let shared = RouterService()
 
@@ -56,10 +59,8 @@ final class RouterService {
     func forceFullRefresh() {
         guard let config = currentConfig else { return }
 
-        Task { @MainActor in
-            AppState.shared.metrics    = nil
-            AppState.shared.fetchError = nil
-        }
+        AppState.shared.metrics    = nil
+        AppState.shared.fetchError = nil
 
         // Restart the polling loop from scratch. The auth flush happens
         // inside the new polling task, before its first fetch, so the flush
@@ -88,11 +89,10 @@ final class RouterService {
                 // Use a shorter interval when the fetch failed or when the
                 // router's cellular connection is not yet "Connected", so
                 // the UI catches the transition to connected quickly.
-                let useRetryInterval = await MainActor.run {
-                    let state = AppState.shared.connectionState
-                    let routerConnected = AppState.shared.metrics?.isRouterConnected ?? false
-                    return state == .failed || (state == .connected && !routerConnected)
-                }
+                let state = AppState.shared.connectionState
+                let routerConnected = AppState.shared.metrics?.isRouterConnected ?? false
+                let useRetryInterval =
+                    state == .failed || (state == .connected && !routerConnected)
 
                 let interval = useRetryInterval ? retryInterval : pollInterval
 
@@ -140,25 +140,20 @@ final class RouterService {
     /// instead of aborting it, so no explicit single-flight gate is needed.
     private func fetchAndPublish(config: HotspotConfig) async {
         guard let provider = providers[config.vendor] else {
-            await MainActor.run {
-                AppState.shared.fetchError =
-                    "No provider available for \(config.vendor.rawValue)"
-            }
-
+            AppState.shared.fetchError =
+                "No provider available for \(config.vendor.rawValue)"
             return
         }
 
         let base = baseURL(for: config)
 
         // Transition to .loading on the very first fetch (no metrics yet).
-        await MainActor.run {
-            if AppState.shared.metrics == nil {
-                AppState.shared.connectionState = .loading
-            }
-
-            AppState.shared.fetchingFromURL = base
-            AppState.shared.isFetching      = true
+        if AppState.shared.metrics == nil {
+            AppState.shared.connectionState = .loading
         }
+
+        AppState.shared.fetchingFromURL = base
+        AppState.shared.isFetching      = true
 
         do {
             let metrics = try await provider.fetchMetrics(config: config, baseURL: base)
@@ -167,32 +162,28 @@ final class RouterService {
             // by now AppState may describe a different hotspot, or none.
             guard !Task.isCancelled else { return }
 
-            await MainActor.run {
-                AppState.shared.metrics         = metrics
-                AppState.shared.connectionState = .connected
-                AppState.shared.lastUpdated     = Date()
-                AppState.shared.fetchError      = nil
-                AppState.shared.fetchingFromURL = nil
-                AppState.shared.isFetching      = false
-            }
+            AppState.shared.metrics         = metrics
+            AppState.shared.connectionState = .connected
+            AppState.shared.lastUpdated     = Date()
+            AppState.shared.fetchError      = nil
+            AppState.shared.fetchingFromURL = nil
+            AppState.shared.isFetching      = false
         } catch {
             // Cancellation surfaces as an error (URLError.cancelled /
             // CancellationError) — that's teardown, not a fetch failure.
             guard !Task.isCancelled else { return }
 
-            await MainActor.run {
-                AppState.shared.fetchError      = Self.humanReadable(error)
-                AppState.shared.fetchingFromURL = nil
-                AppState.shared.isFetching      = false
+            AppState.shared.fetchError      = Self.humanReadable(error)
+            AppState.shared.fetchingFromURL = nil
+            AppState.shared.isFetching      = false
 
-                if AppState.shared.metrics != nil {
-                    // Keep .connected so we don't lose the last good metrics.
-                    AppState.shared.connectionState = .connected
-                } else {
-                    // No data yet — show a failed state so the icon stops
-                    // blinking and the header says "Could not refresh".
-                    AppState.shared.connectionState = .failed
-                }
+            if AppState.shared.metrics != nil {
+                // Keep .connected so we don't lose the last good metrics.
+                AppState.shared.connectionState = .connected
+            } else {
+                // No data yet — show a failed state so the icon stops
+                // blinking and the header says "Could not refresh".
+                AppState.shared.connectionState = .failed
             }
         }
     }

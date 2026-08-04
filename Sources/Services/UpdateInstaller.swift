@@ -260,11 +260,12 @@ final class UpdaterWindowController: NSObject, NSWindowDelegate, URLSessionDownl
         }
 
         cleanup(dmgPath: dmgPath, mountPoint: mountPoint)
-        DispatchQueue.main.async { self.showRestartPrompt() }
+        Task { @MainActor in self.showRestartPrompt() }
     }
 
     // MARK: - Post-install prompt
 
+    @MainActor
     private func showRestartPrompt() {
         isInstalling = false
         window.close()

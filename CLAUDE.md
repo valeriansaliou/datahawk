@@ -147,7 +147,7 @@ Use the computed predicates (`isBatteryLow`, `isRouterConnected`, `isPluggedIn`,
 ## Key architecture patterns
 
 ### State flow
-`AppState` (singleton `ObservableObject`) is the single source of truth. All `@Published` mutations must happen on the **main thread** — callers use `DispatchQueue.main` or `MainActor.run`. SwiftUI views observe `AppState` via `@ObservedObject`. This is **not** compiler-enforced (no `@MainActor` on `AppState`); violations crash Combine observers at runtime.
+`AppState` (singleton `ObservableObject`) is the single source of truth. It is `@MainActor`-isolated, so all access is **compiler-enforced** to the main actor. The same applies to `ConfigStore`, `RouterService`, `SessionStore`, `SessionTracker`, `ClusterCache`, `NotificationManager`, `StatusBarController`, `WiFiMonitor`, and `LocationPermissionManager`. SwiftUI views observe `AppState` via `@ObservedObject`. Closures that are known to run on the main thread but aren't statically isolated (Timer callbacks, Combine sinks, NSEvent monitors, KVO, delegate callbacks from main-run-loop objects) re-enter isolation via `MainActor.assumeIsolated`, which traps if the invariant is ever violated.
 
 ### Connection lifecycle
 ```
@@ -162,7 +162,7 @@ Also triggered by: `.datahawkSettingsDidClose` notification (user may have edite
 
 ### Polling loop (RouterService)
 
-`start(with:)` launches a `Task` that loops: fetch → sleep → repeat. Interval is read live from `ConfigStore.shared.refreshInterval` each cycle. On failure, uses shorter `retryInterval` (10 s) for fast recovery. `refresh()` triggers a one-off fetch; `forceFullRefresh()` flushes provider auth and restarts the loop.
+`RouterService` is `@MainActor`; `start(with:)` launches a `Task` that inherits the main actor and loops: fetch → sleep → repeat. The main thread is only suspended (never blocked) across provider awaits — the HTTP work happens on the `NetgearProvider` actor. Interval is read live from `ConfigStore.shared.refreshInterval` each cycle. On failure, uses shorter `retryInterval` (10 s) for fast recovery. `refresh()` triggers a one-off fetch (no-op while a cycle is in flight); `forceFullRefresh()` restarts the loop with `flushAuthFirst: true`, which flushes provider auth inside the new polling task before its first fetch.
 
 ### NETGEAR auth flow (full)
 ```
@@ -383,8 +383,7 @@ The Sessions map button in `AdminButtonSection` is conditional on `ConfigStore.r
 
 ## Gotchas
 
-- **AppState main-thread rule is not compiler-enforced.** No `@MainActor` annotation; callers must use `DispatchQueue.main` or `MainActor.run`. Violation → Combine crash at runtime.
-- **`@MainActor` on `AppState`/`ConfigStore` is blocked by a background read.** `RouterService.pollInterval` reads `ConfigStore.shared.refreshInterval` from a detached polling `Task` (`Sources/Services/RouterService.swift`), so adding actor isolation would require restructuring the polling loop first. Don't slap `@MainActor` on these without addressing that read.
+- **`MainActor.assumeIsolated` blocks encode runtime invariants.** Timer/Combine/KVO/NSEvent/CoreLocation-delegate closures re-enter main-actor isolation with `assumeIsolated` because those callbacks are only *dynamically* known to run on the main thread. If you reschedule one of those sources onto a background queue, the app will trap at the `assumeIsolated` — that's the mechanism working as intended.
 - **`HotspotConfig.id` must be `var`, not `let`.** SwiftC warns: "Immutable property will not be decoded because it is declared with an initial value which cannot be overwritten." With `let id = UUID()`, JSON-stored ids are silently dropped and a fresh UUID is generated on every decode — a real data-corruption hazard. Keep `var id = UUID()` for round-trip Codable behavior.
 - **ConfigStore.refreshInterval clamping triggers `didSet` twice.** Second pass is a no-op (value already clamped). Not a bug.
 - **NETGEAR data values can arrive as strings.** Session counters (`wwan.dataTransferred.totalb`) are strings like `"762096481"`, not numbers. Use `stringToDouble()`.
@@ -418,7 +417,7 @@ The Sessions map button in `AdminButtonSection` is conditional on `ConfigStore.r
 
 ## Coding conventions
 
-- All `AppState` mutations on the main thread (no exceptions).
+- Shared state (`AppState`, `ConfigStore`, stores, services, controllers) is `@MainActor`-isolated; heavy work goes on actors (`NetgearProvider`) or detached tasks (`ClusterCache.computeClusters`).
 - Mark non-inheritable classes `final` (every concrete class in the project currently is).
 - Prefer typed result enums (`FastPathResult`, `ReleaseResult`) over `(success:Bool, error:Error?)` tuples or sentinel booleans.
 - Add derived state as a computed property on the model (see `RouterMetrics.isBatteryLow` / `isRouterConnected`) rather than recomputing in views or services.

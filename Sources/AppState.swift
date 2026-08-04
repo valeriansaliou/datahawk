@@ -3,8 +3,8 @@
 //
 // Single source of truth for all runtime state. SwiftUI views and the
 // status-bar icon observe this object via Combine's @Published properties.
-// All mutations MUST happen on the main thread (enforced by callers via
-// DispatchQueue.main or MainActor.run).
+// The class is @MainActor-isolated, so all access is compiler-enforced to
+// happen on the main actor.
 
 import Foundation
 import Combine
@@ -52,6 +52,9 @@ enum NetworkType: String, Codable {
 /// Singleton holding every piece of live state that the UI needs. Properties
 /// are grouped by concern: connection lifecycle, fetched metrics, and raw
 /// WiFi detection info (shown in the disconnected view for debugging).
+/// Main-actor isolated — the compiler now enforces what used to be a
+/// by-convention rule ("all mutations on the main thread").
+@MainActor
 final class AppState: ObservableObject {
     static let shared = AppState()
 

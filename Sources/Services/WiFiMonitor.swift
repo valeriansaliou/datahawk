@@ -23,15 +23,16 @@ private func ipv4StoreCallback(
 ) {
     guard let info else { return }
     let monitor = Unmanaged<WiFiMonitor>.fromOpaque(info).takeUnretainedValue()
-    DispatchQueue.main.async { monitor.onNetworkChange?() }
+    Task { @MainActor in monitor.onNetworkChange?() }
 }
 
 // MARK: -
 
+@MainActor
 final class WiFiMonitor {
 
-    /// Called on the main thread whenever the WiFi path or IPv4 state changes.
-    var onNetworkChange: (() -> Void)?
+    /// Called on the main actor whenever the WiFi path or IPv4 state changes.
+    var onNetworkChange: (@MainActor () -> Void)?
 
     private let monitor  = NWPathMonitor(requiredInterfaceType: .wifi)
     private let queue    = DispatchQueue(label: "com.datahawk.wifi-monitor", qos: .utility)
@@ -42,7 +43,7 @@ final class WiFiMonitor {
     func start() {
         // NWPathMonitor — fast signal for WiFi association / disassociation.
         monitor.pathUpdateHandler = { [weak self] _ in
-            DispatchQueue.main.async { self?.onNetworkChange?() }
+            Task { @MainActor in self?.onNetworkChange?() }
         }
         monitor.start(queue: queue)
 
