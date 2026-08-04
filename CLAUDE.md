@@ -55,7 +55,7 @@ Sources/
 │
 ├── Services/
 │   ├── ConfigStore.swift               # UserDefaults persistence for hotspots + options
-│   ├── RouterService.swift             # Polling loop, FetchGate actor, error formatting
+│   ├── RouterService.swift             # Polling loop, error formatting
 │   ├── WiFiMonitor.swift               # NWPathMonitor + CoreWLAN BSSID detection
 │   ├── LocationPermissionManager.swift # CLLocationManager wrapper (needed for bssid())
 │   ├── UpdateChecker.swift             # Polls GitHub Releases for newer DMGs
@@ -179,8 +179,8 @@ Fast path: inject cached cookies → single `GET /api/model.json`. Up to 2 attem
 
 **Cookie cache:** stored in UserDefaults key `"netgear_cookies_v1"`, keyed by normalized base URL. Flushed via `flushAuth()`.
 
-### Single-flight gate
-`FetchGate` is a Swift `actor` that prevents concurrent HTTP cycles from aborting each other. `RouterService.stop()` releases the gate via a fire-and-forget `Task` — safe because `stop()` also cancels the polling `Task`, so no new acquire can race ahead.
+### Fetch serialisation
+HTTP cycles serialise on the `NetgearProvider` actor: a competing `fetchMetrics` call queues behind the in-flight one instead of aborting it, so there is no explicit single-flight gate. `RouterService.refresh()` additionally no-ops while `AppState.isFetching` is true to avoid queueing duplicate cycles. Cancelled cycles (`stop()` / hotspot switch) are guarded by `Task.isCancelled` checks after every await so they never publish stale state into `AppState`.
 
 ### Error handling flow
 ```

@@ -7,26 +7,6 @@
 
 import Foundation
 
-// MARK: - Single-flight gate
-
-/// Serialises concurrent fetch attempts. Whichever caller acquires first
-/// runs the HTTP cycle; subsequent callers return immediately so the
-/// in-flight requests are never aborted by a competing fetch.
-private actor FetchGate {
-    private var inFlight = false
-
-    func tryAcquire() -> Bool {
-        guard !inFlight else { return false }
-
-        inFlight = true
-        return true
-    }
-
-    func release() {
-        inFlight = false
-    }
-}
-
 // MARK: - Router service
 
 final class RouterService {
@@ -47,7 +27,6 @@ final class RouterService {
     private var pollingTask: Task<Void, Never>?
     private var refreshTask: Task<Void, Never>?
     private var currentConfig: HotspotConfig?
-    private let fetchGate = FetchGate()
 
     /// One provider instance per vendor. Looked up by `HotspotConfig.vendor`.
     private let providers: [RouterVendor: any RouterProvider] = [
@@ -59,8 +38,12 @@ final class RouterService {
     // MARK: - Public control
 
     /// Triggers a single ad-hoc refresh (soft — reuses cached auth).
+    /// No-ops while a cycle is already in flight — that cycle will deliver
+    /// fresh data anyway, and skipping avoids queueing duplicate HTTP cycles
+    /// on the provider when the button is clicked repeatedly.
     func refresh() {
         guard let config = currentConfig else { return }
+        guard !AppState.shared.isFetching else { return }
 
         refreshTask?.cancel()
         refreshTask = Task {
@@ -122,18 +105,14 @@ final class RouterService {
         }
     }
 
-    /// Cancels all in-flight and scheduled work and releases the fetch gate
-    /// so the next `start(with:)` can acquire it immediately.
+    /// Cancels all in-flight and scheduled work. Cancellation propagates
+    /// into URLSession, so an in-flight HTTP cycle aborts promptly; its
+    /// post-await cancellation guards prevent it from publishing anything.
     func stop() {
         pollingTask?.cancel()
         pollingTask = nil
         refreshTask?.cancel()
         refreshTask = nil
-
-        // Release the gate so the next start() can fetch immediately.
-        // We await it to avoid a fire-and-forget race where start() calls
-        // tryAcquire() before the release has landed.
-        Task { await fetchGate.release() }
     }
 
     // MARK: - Base URL resolution
@@ -156,14 +135,10 @@ final class RouterService {
 
     // MARK: - Fetch cycle
 
-    /// Runs a single fetch-and-publish cycle. Protected by `FetchGate` to
-    /// ensure only one HTTP cycle runs at a time.
+    /// Runs a single fetch-and-publish cycle. HTTP cycles serialise on the
+    /// provider actor: a competing cycle queues behind the in-flight one
+    /// instead of aborting it, so no explicit single-flight gate is needed.
     private func fetchAndPublish(config: HotspotConfig) async {
-        // Single-flight: if another fetch is already in progress, bail out
-        // so we don't abort in-flight HTTP requests.
-        guard await fetchGate.tryAcquire() else { return }
-        defer { Task { await self.fetchGate.release() } }
-
         guard let provider = providers[config.vendor] else {
             await MainActor.run {
                 AppState.shared.fetchError =
@@ -188,6 +163,10 @@ final class RouterService {
         do {
             let metrics = try await provider.fetchMetrics(config: config, baseURL: base)
 
+            // A cancelled cycle (stop() / hotspot switch) must not publish:
+            // by now AppState may describe a different hotspot, or none.
+            guard !Task.isCancelled else { return }
+
             await MainActor.run {
                 AppState.shared.metrics         = metrics
                 AppState.shared.connectionState = .connected
@@ -197,6 +176,10 @@ final class RouterService {
                 AppState.shared.isFetching      = false
             }
         } catch {
+            // Cancellation surfaces as an error (URLError.cancelled /
+            // CancellationError) — that's teardown, not a fetch failure.
+            guard !Task.isCancelled else { return }
+
             await MainActor.run {
                 AppState.shared.fetchError      = Self.humanReadable(error)
                 AppState.shared.fetchingFromURL = nil
