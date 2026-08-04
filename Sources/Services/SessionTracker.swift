@@ -25,6 +25,11 @@ final class SessionTracker: NSObject, CLLocationManagerDelegate {
     private var activeSession: SessionRecord?
     private var cancellables: Set<AnyCancellable> = []
     private var locationManager: CLLocationManager
+
+    /// Kept as a stored property: CLGeocoder must stay strongly referenced
+    /// for the duration of a request — a deallocated geocoder cancels its
+    /// in-flight request and the completion may never fire.
+    private let geocoder = CLGeocoder()
     private var locationCheckTimer: Timer?
     private var lastKnownLocation: CLLocation?
     private var isAwaitingFirstFix = false
@@ -278,7 +283,14 @@ final class SessionTracker: NSObject, CLLocationManagerDelegate {
     // CLGeocoder is deprecated in macOS 26 in favour of MKReverseGeocodingRequest.
     // Migration deferred until the replacement API stabilises post-WWDC 2025.
     private func geocode(_ location: CLLocation, completion: @escaping @MainActor (String?) -> Void) {
-        CLGeocoder().reverseGeocodeLocation(location) { placemarks, _ in
+        // CLGeocoder handles one request at a time. A still-running request
+        // belongs to a previous session (sessions split on movement), and its
+        // stale-ID guard would discard the result anyway — cancel it.
+        if geocoder.isGeocoding {
+            geocoder.cancelGeocode()
+        }
+
+        geocoder.reverseGeocodeLocation(location) { placemarks, _ in
             let name = placemarks?.first.map { placemark in
                 [placemark.locality, placemark.administrativeArea, placemark.country]
                     .compactMap { $0 }
