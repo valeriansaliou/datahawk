@@ -49,10 +49,24 @@ final class WiFiMonitor {
 
         // SCDynamicStore — fires precisely when any interface's IPv4 config
         // changes in configd (DHCP lease acquired, renewed, or released).
+        //
+        // The retain/release callbacks make the store hold a strong reference
+        // to this monitor for as long as it exists. Without them the callback
+        // would dereference an unretained pointer — a use-after-free if the
+        // monitor were ever deallocated while the store's queue is live. The
+        // resulting retain cycle (store → monitor → store) is broken by
+        // stop(), which releases the store.
         var ctx = SCDynamicStoreContext(
             version: 0,
             info: Unmanaged.passUnretained(self).toOpaque(),
-            retain: nil, release: nil, copyDescription: nil
+            retain: { info in
+                _ = Unmanaged<WiFiMonitor>.fromOpaque(info).retain()
+                return UnsafeRawPointer(info)
+            },
+            release: { info in
+                Unmanaged<WiFiMonitor>.fromOpaque(info).release()
+            },
+            copyDescription: nil
         )
 
         guard let store = SCDynamicStoreCreate(
@@ -70,7 +84,13 @@ final class WiFiMonitor {
 
     func stop() {
         monitor.cancel()
-        dynStore = nil  // releasing the store unregisters the dispatch queue
+
+        // Documented teardown order: detach the dispatch queue first, then
+        // release the store (which also drops its retain on this monitor).
+        if let store = dynStore {
+            SCDynamicStoreSetDispatchQueue(store, nil)
+        }
+        dynStore = nil
     }
 
     // MARK: - SSID detection
