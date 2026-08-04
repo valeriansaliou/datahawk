@@ -26,6 +26,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusBarController = StatusBarController()
         statusBarController.start()
 
+        // Touch the router service so its providers initialise now — the
+        // NETGEAR provider runs its one-time cookies-to-Keychain migration
+        // in init, and that should happen deterministically at launch, not
+        // lazily on the first hotspot connection.
+        _ = RouterService.shared
+
         // CoreWLAN's bssid() returns nil unless Location Services is granted.
         // Request permission now; once granted, re-check the active connection
         // so the hotspot is recognised without waiting for a WiFi event.

@@ -54,7 +54,8 @@ Sources/
 │   └── SessionRecord.swift             # SessionRecord + SessionLocation value types
 │
 ├── Services/
-│   ├── ConfigStore.swift               # UserDefaults persistence for hotspots + options
+│   ├── ConfigStore.swift               # UserDefaults persistence for hotspots + options (passwords → Keychain)
+│   ├── KeychainStore.swift             # Generic-password Keychain wrapper (secrets storage)
 │   ├── RouterService.swift             # Polling loop, error formatting
 │   ├── WiFiMonitor.swift               # NWPathMonitor + CoreWLAN BSSID detection
 │   ├── LocationPermissionManager.swift # CLLocationManager wrapper (needed for bssid())
@@ -177,7 +178,9 @@ Fast path: inject cached cookies → single `GET /api/model.json`. Up to 2 attem
 - `.stale` — router replied but the cookie is rejected (`wwan.connection` absent) or another non-timeout error: drop the cookie and proceed to full auth immediately.
 - `.timedOut` — both attempts ran out of time: drop the cookie, sleep 10 s (router may be rebooting), then run full auth.
 
-**Cookie cache:** stored in UserDefaults key `"netgear_cookies_v1"`, keyed by normalized base URL. Flushed via `flushAuth()`.
+**Cookie cache:** stored in the Keychain (account `netgear-cookies-v1`, one binary-plist item), keyed by normalized base URL. Flushed via `flushAuth()`. A one-time migration in `NetgearProvider.init` moves cookies from the legacy UserDefaults key `netgear_cookies_v1` into the Keychain; `AppDelegate` touches `RouterService.shared` at launch so this runs deterministically.
+
+**Credentials:** router admin passwords live in the Keychain, one generic-password item per hotspot (`hotspot-password.<uuid>`, service `com.datahawk.app`). `HotspotConfig`'s custom Codable never encodes the password; `ConfigStore.load()` reads it back from the Keychain, and migrates any legacy plain-text password found in the JSON on first load.
 
 ### Fetch serialisation
 HTTP cycles serialise on the `NetgearProvider` actor: a competing `fetchMetrics` call queues behind the in-flight one instead of aborting it, so there is no explicit single-flight gate. `RouterService.refresh()` additionally no-ops while `AppState.isFetching` is true to avoid queueing duplicate cycles. Cancelled cycles (`stop()` / hotspot switch) are guarded by `Task.isCancelled` checks after every await so they never publish stale state into `AppState`.
@@ -384,7 +387,7 @@ The Sessions map button in `AdminButtonSection` is conditional on `ConfigStore.r
 ## Gotchas
 
 - **`MainActor.assumeIsolated` blocks encode runtime invariants.** Timer/Combine/KVO/NSEvent/CoreLocation-delegate closures re-enter main-actor isolation with `assumeIsolated` because those callbacks are only *dynamically* known to run on the main thread. If you reschedule one of those sources onto a background queue, the app will trap at the `assumeIsolated` — that's the mechanism working as intended.
-- **`HotspotConfig.id` must be `var`, not `let`.** SwiftC warns: "Immutable property will not be decoded because it is declared with an initial value which cannot be overwritten." With `let id = UUID()`, JSON-stored ids are silently dropped and a fresh UUID is generated on every decode — a real data-corruption hazard. Keep `var id = UUID()` for round-trip Codable behavior.
+- **`HotspotConfig` has custom Codable in an extension — the password is never encoded.** It lives in the Keychain, keyed by the hotspot's `id`; `ConfigStore` owns the read/write/migrate logic. Don't add `password` back to `encode(to:)`, and keep the Codable conformance in the extension so the memberwise init stays synthesized. The `id` is decoded explicitly, so the synthesized-decode `let id` hazard no longer applies here (it still does for `SessionRecord`, below).
 - **ConfigStore.refreshInterval clamping triggers `didSet` twice.** Second pass is a no-op (value already clamped). Not a bug.
 - **NETGEAR data values can arrive as strings.** Session counters (`wwan.dataTransferred.totalb`) are strings like `"762096481"`, not numbers. Use `stringToDouble()`.
 - **NETGEAR firmware flag is polymorphic.** Can be `Bool`, `"1"`, or `1`. Handled by `parseFirmwareFlag()`.
@@ -406,7 +409,6 @@ The Sessions map button in `AdminButtonSection` is conditional on `ConfigStore.r
 
 ## Known limitations / planned work
 
-- **Credentials stored in plain text** in UserDefaults. Keychain migration needed before any public/App Store release.
 - **Single vendor** (NETGEAR). Provider pattern is in place for others.
 - **No incremental compilation** — every build recompiles all sources.
 - **Location "always" permission** is requested, though "when in use" would suffice for foreground BSSID detection. This is a known over-ask.

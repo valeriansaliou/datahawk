@@ -27,16 +27,37 @@ actor NetgearProvider: RouterProvider {
     // MARK: - Cookie cache
 
     /// Auth cookies keyed by normalised base URL.
-    /// Loaded from UserDefaults on init and persisted after every update.
+    /// Loaded from the Keychain on init and persisted after every update.
     /// Actor isolation serialises all access — the cache is mutated both by
     /// fetch cycles (background tasks) and by flushAuth() (user-initiated).
     private var cachedCookies: [String: [HTTPCookie]] = [:]
 
-    /// UserDefaults key for the serialised cookie cache.
-    private let cookiesDefaultsKey = "netgear_cookies_v1"
+    /// Keychain account for the serialised cookie cache.
+    private static let cookiesKeychainAccount = "netgear-cookies-v1"
+
+    /// Legacy UserDefaults key — cookies lived there (plain text) before the
+    /// Keychain move. Kept only so the one-time migration can find them.
+    private static let legacyCookiesDefaultsKey = "netgear_cookies_v1"
 
     init() {
-        cachedCookies = Self.loadCookies(forKey: cookiesDefaultsKey)
+        // One-time migration: pre-Keychain versions stored the session
+        // cookies in UserDefaults. Pull them out, re-persist to the
+        // Keychain, and remove the plain-text copy. The legacy value is
+        // already in plist form, so it's written to the Keychain directly
+        // (an actor init cannot call the isolated persistCookies()).
+        if let legacy = UserDefaults.standard.dictionary(forKey: Self.legacyCookiesDefaultsKey)
+            as? [String: [[String: Any]]] {
+            UserDefaults.standard.removeObject(forKey: Self.legacyCookiesDefaultsKey)
+            cachedCookies = Self.cookies(fromPlist: legacy)
+
+            if let data = try? PropertyListSerialization.data(
+                fromPropertyList: legacy, format: .binary, options: 0
+            ) {
+                KeychainStore.writeData(data, account: Self.cookiesKeychainAccount)
+            }
+        } else {
+            cachedCookies = Self.loadCookies()
+        }
     }
 
     // MARK: - RouterProvider conformance
@@ -44,7 +65,7 @@ actor NetgearProvider: RouterProvider {
     /// Discards all cached cookies so the next fetch performs a full login.
     func flushAuth() {
         cachedCookies = [:]
-        UserDefaults.standard.removeObject(forKey: cookiesDefaultsKey)
+        KeychainStore.delete(account: Self.cookiesKeychainAccount)
     }
 
     /// Fetches metrics from the router, using the fast path (cached cookie)
@@ -282,10 +303,12 @@ actor NetgearProvider: RouterProvider {
         return value.addingPercentEncoding(withAllowedCharacters: allowed) ?? value
     }
 
-    // MARK: - Cookie persistence
+    // MARK: - Cookie persistence (Keychain)
 
-    /// Serialises the cookie cache to UserDefaults. Only plist-safe types
-    /// (String, Date, NSNumber, URL-as-String) are kept.
+    /// Serialises the cookie cache to a binary plist and stores it as a
+    /// single Keychain item (cookies are session credentials — they don't
+    /// belong in plain-text UserDefaults). Only plist-safe types (String,
+    /// Date, NSNumber, URL-as-String) are kept.
     private func persistCookies() {
         let serialized: [String: [[String: Any]]] = cachedCookies.mapValues { cookies in
             cookies.compactMap { cookie -> [String: Any]? in
@@ -307,19 +330,30 @@ actor NetgearProvider: RouterProvider {
             }
         }
 
-        UserDefaults.standard.set(serialized, forKey: cookiesDefaultsKey)
+        guard let data = try? PropertyListSerialization.data(
+            fromPropertyList: serialized, format: .binary, options: 0
+        ) else { return }
+
+        KeychainStore.writeData(data, account: Self.cookiesKeychainAccount)
     }
 
-    /// Deserialises the cookie cache from UserDefaults.
-    private static func loadCookies(
-        forKey key: String
-    ) -> [String: [HTTPCookie]] {
-        guard let raw = UserDefaults.standard.dictionary(forKey: key)
-                as? [String: [[String: Any]]] else {
+    /// Deserialises the cookie cache from the Keychain.
+    private static func loadCookies() -> [String: [HTTPCookie]] {
+        guard let data = KeychainStore.readData(account: cookiesKeychainAccount),
+              let raw  = (try? PropertyListSerialization.propertyList(
+                  from: data, options: [], format: nil
+              )) as? [String: [[String: Any]]] else {
             return [:]
         }
 
-        return raw.compactMapValues { dicts in
+        return cookies(fromPlist: raw)
+    }
+
+    /// Rebuilds HTTPCookie values from their plist representation.
+    private static func cookies(
+        fromPlist raw: [String: [[String: Any]]]
+    ) -> [String: [HTTPCookie]] {
+        raw.compactMapValues { dicts in
             let cookies = dicts.compactMap { dict -> HTTPCookie? in
                 let props = Dictionary(
                     uniqueKeysWithValues: dict.map {

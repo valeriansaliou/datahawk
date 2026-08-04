@@ -19,7 +19,7 @@ enum RouterVendor: String, Codable, CaseIterable, Identifiable {
 
 // MARK: - Hotspot configuration
 
-struct HotspotConfig: Identifiable, Codable, Equatable {
+struct HotspotConfig: Identifiable, Equatable {
     var id = UUID()
 
     /// Human-readable label shown in the popover, e.g. "Office M6 Pro".
@@ -47,5 +47,45 @@ struct HotspotConfig: Identifiable, Codable, Equatable {
     /// "aa-bb-cc-dd-ee-ff", and "aabbccddeeff" all compare equal.
     var normalizedMAC: String {
         macAddress.lowercased().filter { $0.isHexDigit }
+    }
+}
+
+// MARK: - Codable (password excluded)
+
+// Custom Codable lives in an extension so the synthesized memberwise init
+// stays available. The password is deliberately NEVER encoded: it lives in
+// the Keychain (see ConfigStore), keyed by the hotspot's id. Decoding still
+// accepts a `password` key so pre-Keychain configs load once and migrate.
+extension HotspotConfig: Codable {
+
+    private enum CodingKeys: String, CodingKey {
+        case id, name, macAddress, vendor, username, password, customBaseURL
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+
+        id            = try c.decode(UUID.self,          forKey: .id)
+        name          = try c.decode(String.self,        forKey: .name)
+        macAddress    = try c.decode(String.self,        forKey: .macAddress)
+        vendor        = try c.decode(RouterVendor.self,  forKey: .vendor)
+        username      = try c.decode(String.self,        forKey: .username)
+        customBaseURL = try c.decodeIfPresent(String.self, forKey: .customBaseURL)
+
+        // Legacy plain-text password (pre-Keychain storage). ConfigStore
+        // migrates it to the Keychain on load, then re-persists without it.
+        password      = try c.decodeIfPresent(String.self, forKey: .password) ?? ""
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+
+        try c.encode(id,            forKey: .id)
+        try c.encode(name,          forKey: .name)
+        try c.encode(macAddress,    forKey: .macAddress)
+        try c.encode(vendor,        forKey: .vendor)
+        try c.encode(username,      forKey: .username)
+        try c.encodeIfPresent(customBaseURL, forKey: .customBaseURL)
+        // password intentionally not encoded — Keychain only.
     }
 }

@@ -4,8 +4,11 @@
 // Persists and exposes the list of known hotspot configurations and the
 // user's options (refresh interval, etc.).
 //
-// Storage: UserDefaults with JSON-encoded payloads. Credentials are stored
-// in plain text for the MVP; migrate to Keychain before shipping publicly.
+// Storage: UserDefaults with JSON-encoded payloads for everything except
+// router passwords, which live in the Keychain (one generic-password item
+// per hotspot, keyed by its UUID). Pre-Keychain configs that still carry a
+// plain-text password in the JSON are migrated on first load: the password
+// is written to the Keychain and the JSON is re-persisted without it.
 
 import Foundation
 import Combine
@@ -124,23 +127,49 @@ final class ConfigStore: ObservableObject {
     }
 
     func remove(id: UUID) {
+        KeychainStore.delete(account: Self.passwordAccount(id))
         hotspots.removeAll { $0.id == id }
     }
 
     // MARK: - Persistence (private)
 
-    /// Encodes the current hotspot list to JSON and writes it to UserDefaults.
+    /// Keychain account name for a hotspot's admin password.
+    private static func passwordAccount(_ id: UUID) -> String {
+        "hotspot-password.\(id.uuidString)"
+    }
+
+    /// Encodes the current hotspot list to JSON (passwords excluded — see
+    /// HotspotConfig's Codable) and writes it to UserDefaults; passwords go
+    /// to the Keychain, one item per hotspot.
     private func persist() {
         guard let data = try? JSONEncoder().encode(hotspots) else { return }
 
         UserDefaults.standard.set(data, forKey: hotspotsKey)
+
+        for hotspot in hotspots {
+            if hotspot.password.isEmpty {
+                KeychainStore.delete(account: Self.passwordAccount(hotspot.id))
+            } else {
+                KeychainStore.writeString(
+                    hotspot.password, account: Self.passwordAccount(hotspot.id)
+                )
+            }
+        }
     }
 
     /// Reads both hotspots and options from UserDefaults on launch.
     private func load() {
-        // Hotspots
+        // Hotspots. Passwords come from the Keychain; a non-empty password
+        // decoded from the JSON is legacy plain-text storage — keeping it in
+        // memory and assigning `hotspots` triggers persist(), which writes
+        // it to the Keychain and strips it from UserDefaults (migration).
         if let data    = UserDefaults.standard.data(forKey: hotspotsKey),
-           let decoded = try? JSONDecoder().decode([HotspotConfig].self, from: data) {
+           var decoded = try? JSONDecoder().decode([HotspotConfig].self, from: data) {
+            for index in decoded.indices where decoded[index].password.isEmpty {
+                decoded[index].password =
+                    KeychainStore.readString(account: Self.passwordAccount(decoded[index].id)) ?? ""
+            }
+
             hotspots = decoded
         }
 
