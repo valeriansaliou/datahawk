@@ -257,7 +257,7 @@ AppState.$connectionState (scan → previous, current)
 
 **Signal sampling:** every `AppState.$metrics` emission appends `signalStrength` to `signalSamples` on the active session. Persisted on a fixed 5-minute cadence (`samplePersistInterval`) — independent of the user's refresh interval — so a 5 s polling interval doesn't write 12 lines/minute to the JSONL file.
 
-**Location:** one-shot `CLLocationManager.requestLocation()` at session open. Stores the first fix as the session anchor. Every 10 minutes a fresh fix is requested; if it's >100 m from the anchor (`locationChangeDist`), the session is split — `closeActiveSession()` followed by `openSession()`. The geocoded name is fetched via `CLGeocoder.reverseGeocodeLocation` and applied to the active session **only if its ID still matches** the one captured at the time of the request (guards against a stale callback overwriting a session that was split during the geocode).
+**Location:** one-shot `CLLocationManager.requestLocation()` at session open. Stores the first fix as the session anchor. Every 10 minutes a fresh fix is requested; if it's >100 m from the anchor (`locationChangeDist`), the session is split — `closeActiveSession()` followed by `openSession()`. The geocoded name is fetched via MapKit's `MKReverseGeocodingRequest` (`addressRepresentations.cityWithContext`) and applied to the active session **only if its ID still matches** the one captured at the time of the request (guards against a stale callback overwriting a session that was split during the geocode).
 
 **Crash recovery:** `closeOrphanedSessions()` runs at every launch (unconditionally — orphans should be finalised even when the toggle is currently off). Stamps `endDate = Date()` on any open session left by a previous run.
 
@@ -412,7 +412,6 @@ The Sessions map button in `AdminButtonSection` is conditional on `ConfigStore.r
 - **Single vendor** (NETGEAR). Provider pattern is in place for others.
 - **No incremental compilation** — every build recompiles all sources.
 - **Location "always" permission** is requested, though "when in use" would suffice for foreground BSSID detection. This is a known over-ask.
-- **`CLGeocoder` is deprecated on macOS 26.** `SessionTracker.geocode(...)` still uses it; migration to `MKReverseGeocodingRequest` is deferred until the replacement API stabilises post-WWDC 2025. A deprecation warning at build time is expected.
 - **Sessions table doesn't auto-scroll on selection.** Tapping a map pin selects the session and switches to the List tab, but the SwiftUI `Table` does not scroll the selected row into view — the user may need to scroll manually.
 
 ---

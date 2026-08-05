@@ -17,6 +17,7 @@
 import Foundation
 import Combine
 import CoreLocation
+import MapKit
 
 @MainActor
 final class SessionTracker: NSObject, CLLocationManagerDelegate {
@@ -26,10 +27,9 @@ final class SessionTracker: NSObject, CLLocationManagerDelegate {
     private var cancellables: Set<AnyCancellable> = []
     private var locationManager: CLLocationManager
 
-    /// Kept as a stored property: CLGeocoder must stay strongly referenced
-    /// for the duration of a request — a deallocated geocoder cancels its
-    /// in-flight request and the completion may never fire.
-    private let geocoder = CLGeocoder()
+    /// In-flight reverse-geocoding request, kept so a newer request can
+    /// cancel a stale one still running for a previous session.
+    private var pendingGeocode: MKReverseGeocodingRequest?
     private var locationCheckTimer: Timer?
     private var lastKnownLocation: CLLocation?
     private var isAwaitingFirstFix = false
@@ -280,24 +280,21 @@ final class SessionTracker: NSObject, CLLocationManagerDelegate {
 
     // MARK: - Reverse geocoding
 
-    // CLGeocoder is deprecated in macOS 26 in favour of MKReverseGeocodingRequest.
-    // Migration deferred until the replacement API stabilises post-WWDC 2025.
     private func geocode(_ location: CLLocation, completion: @escaping @MainActor (String?) -> Void) {
-        // CLGeocoder handles one request at a time. A still-running request
-        // belongs to a previous session (sessions split on movement), and its
-        // stale-ID guard would discard the result anyway — cancel it.
-        if geocoder.isGeocoding {
-            geocoder.cancelGeocode()
-        }
+        // A still-running request belongs to a previous session (sessions
+        // split on movement), and its stale-ID guard would discard the
+        // result anyway — cancel it.
+        pendingGeocode?.cancel()
 
-        geocoder.reverseGeocodeLocation(location) { placemarks, _ in
-            let name = placemarks?.first.map { placemark in
-                [placemark.locality, placemark.administrativeArea, placemark.country]
-                    .compactMap { $0 }
-                    .filter { !$0.isEmpty }
-                    .joined(separator: ", ")
-            }
-            Task { @MainActor in completion(name) }
+        guard let request = MKReverseGeocodingRequest(location: location) else {
+            completion(nil)
+            return
+        }
+        pendingGeocode = request
+
+        Task {
+            let mapItems = try? await request.mapItems
+            completion(mapItems?.first?.addressRepresentations?.cityWithContext)
         }
     }
 }
