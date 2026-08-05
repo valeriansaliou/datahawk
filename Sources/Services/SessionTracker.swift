@@ -294,7 +294,19 @@ final class SessionTracker: NSObject, CLLocationManagerDelegate {
 
         Task {
             let mapItems = try? await request.mapItems
-            completion(mapItems?.first?.addressRepresentations?.cityWithContext)
+            completion(Self.locationName(from: mapItems?.first?.addressRepresentations))
         }
+    }
+
+    /// Builds a "City, Region, Country" display name from a geocoding result.
+    /// `cityWithContext(.full)` folds city, administrative region, and country
+    /// into one localized string (region included when known). When the city
+    /// is unknown, falls back to the country name alone (`regionName`).
+    private static func locationName(from address: MKAddressRepresentations?) -> String? {
+        guard let address else { return nil }
+        if address.cityName != nil, let full = address.cityWithContext(.full) {
+            return full
+        }
+        return address.regionName
     }
 }
