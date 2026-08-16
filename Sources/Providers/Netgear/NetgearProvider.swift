@@ -19,6 +19,14 @@
 //     full auth flow.
 //   - If `session.userRole` is not "Admin" (stale / expired cookie),
 //     discard the cache and fall through to full auth immediately.
+//
+// Write actions (mark SMS read, …) reuse the same auth, then POST to
+// /Forms/config with a CSRF token taken from the very model.json response
+// that proved the session is authenticated.
+//
+// Every public entry point takes `RouterLock` for its whole duration, so
+// only one flow is ever on the wire. New entry points must do the same; the
+// private HTTP helpers must not, or they would deadlock against it.
 
 import Foundation
 
@@ -70,7 +78,14 @@ actor NetgearProvider: RouterProvider {
 
     /// Fetches metrics from the router, using the fast path (cached cookie)
     /// when possible and falling back to the full auth flow otherwise.
+    ///
+    /// Holds `RouterLock` for the whole cycle, including the 10 s wait in the
+    /// `.timedOut` branch — a router that just timed out twice has nothing to
+    /// offer a queued write anyway.
     func fetchMetrics(config: HotspotConfig, baseURL: String) async throws -> RouterMetrics {
+        await RouterLock.shared.acquire()
+        defer { RouterLock.shared.release() }
+
         let base = normalizedBase(baseURL)
 
         // -- Fast path: reuse cached auth cookie ----------------------------
@@ -83,20 +98,88 @@ actor NetgearProvider: RouterProvider {
             case .stale:
                 // Valid HTTP response but unauthenticated — drop the cookie
                 // and fall through to full auth.
-                cachedCookies[base] = nil
-                persistCookies()
+                dropCookies(for: base)
 
             case .timedOut:
                 // Router likely not yet reachable (e.g. just switched networks).
                 // Drop the cookie and wait before the heavier full-auth flow.
-                cachedCookies[base] = nil
-                persistCookies()
+                dropCookies(for: base)
                 try await Task.sleep(for: .seconds(10))
             }
         }
 
         // -- Full auth flow (standard timeouts) -----------------------------
 
+        let (_, model) = try await fullAuth(config: config, base: base)
+
+        return extractMetrics(from: model, baseURL: base)
+    }
+
+    // MARK: - SMS write actions
+
+    /// Marks a single message as read on the router.
+    ///
+    /// NETGEAR models this as an ordinary `/Forms/config` write keyed by the
+    /// message id. The token read and the write are one atomic block: the
+    /// token rotates per response, so two overlapping writes would invalidate
+    /// each other's token. Actor isolation cannot provide that — actors are
+    /// reentrant and release at every `await` — hence `RouterLock`.
+    func markSMSRead(id: String, config: HotspotConfig, baseURL: String) async throws {
+        await RouterLock.shared.acquire()
+        defer { RouterLock.shared.release() }
+
+        let base = normalizedBase(baseURL)
+        let (session, model) = try await authenticatedSession(config: config, base: base)
+
+        try await postConfig(
+            session,
+            baseURL:  base,
+            secToken: try secToken(from: model),
+            fields:   ["sms.readId": id]
+        )
+    }
+
+    /// Deletes every message stored on the router in a single write.
+    ///
+    /// `sms.deleteAll` wipes the whole inbox router-side, so no per-message
+    /// loop is needed. The write is followed by a fresh `model.json` read
+    /// which both proves the wipe took effect and gives the caller the
+    /// authoritative post-delete state to publish.
+    func deleteAllSMS(config: HotspotConfig, baseURL: String) async throws -> RouterMetrics {
+        // Held across the write and the read-back: polls queue behind it and
+        // then observe the emptied inbox, instead of racing it and
+        // republishing deleted rows.
+        await RouterLock.shared.acquire()
+        defer { RouterLock.shared.release() }
+
+        let base = normalizedBase(baseURL)
+        let (session, model) = try await authenticatedSession(config: config, base: base)
+
+        try await postConfig(
+            session,
+            baseURL:  base,
+            secToken: try secToken(from: model),
+            fields:   ["sms.deleteAll": "1"]
+        )
+
+        let updated = try await fetchJSON(session, "\(base)/api/model.json")
+
+        guard parseSMSMessages(updated).isEmpty else {
+            throw ProviderError("Router did not delete the messages")
+        }
+
+        return extractMetrics(from: updated, baseURL: base)
+    }
+
+    // MARK: - Authentication
+
+    /// Runs the full four-step login flow and caches the resulting cookies
+    /// for subsequent fast-path refreshes.
+    /// - Returns: The authenticated session and the model.json it produced.
+    private func fullAuth(
+        config: HotspotConfig,
+        base: String
+    ) async throws -> (session: URLSession, model: [String: Any]) {
         let session = makeFreshSession()
 
         // Step 1: Obtain an anonymous session cookie.
@@ -104,15 +187,11 @@ actor NetgearProvider: RouterProvider {
 
         // Step 2: Read the security token from the public model.
         let pubModel = try await fetchJSON(session, "\(base)/api/model.json")
-
-        guard let secToken = stringValue(pubModel, "session.secToken"),
-              !secToken.isEmpty else {
-            throw ProviderError("Router returned an unexpected response")
-        }
+        let token    = try secToken(from: pubModel)
 
         // Step 3: POST credentials to authenticate the session.
         try await login(
-            session, baseURL: base, secToken: secToken, password: config.password
+            session, baseURL: base, secToken: token, password: config.password
         )
 
         // Step 4: Fetch the full (authenticated) model.
@@ -125,7 +204,49 @@ actor NetgearProvider: RouterProvider {
             persistCookies()
         }
 
-        return extractMetrics(from: model, baseURL: base)
+        return (session, model)
+    }
+
+    /// Returns a session known to be authenticated, together with the
+    /// model.json response that proved it — writes need a CSRF token from
+    /// that very round-trip, since the token rotates per response.
+    ///
+    /// Uses the cached cookie when it still holds; otherwise falls back to a
+    /// full login. Unlike the metrics fast path there is no short-timeout
+    /// retry: a write is user-initiated and infrequent, so one attempt at the
+    /// standard timeout is enough.
+    private func authenticatedSession(
+        config: HotspotConfig,
+        base: String
+    ) async throws -> (session: URLSession, model: [String: Any]) {
+        if let cookies = cachedCookies[base] {
+            let session = sessionWithCookies(cookies)
+
+            if let model = try? await fetchJSON(session, "\(base)/api/model.json"),
+               isAuthenticated(model) {
+                return (session, model)
+            }
+
+            dropCookies(for: base)
+        }
+
+        return try await fullAuth(config: config, base: base)
+    }
+
+    /// Extracts the CSRF token a `/Forms/config` write must carry.
+    private func secToken(from model: [String: Any]) throws -> String {
+        guard let token = stringValue(model, "session.secToken"),
+              !token.isEmpty else {
+            throw ProviderError("Router returned an unexpected response")
+        }
+
+        return token
+    }
+
+    /// Forgets the cached cookie for a base URL so the next call re-logs in.
+    private func dropCookies(for base: String) {
+        cachedCookies[base] = nil
+        persistCookies()
     }
 
     // MARK: - Fast-path helper
@@ -178,13 +299,24 @@ actor NetgearProvider: RouterProvider {
         base: String,
         requestTimeout: TimeInterval = 8
     ) async throws -> [String: Any] {
+        try await fetchJSON(
+            sessionWithCookies(cookies, requestTimeout: requestTimeout),
+            "\(base)/api/model.json"
+        )
+    }
+
+    /// Builds a fresh ephemeral session pre-seeded with cached auth cookies.
+    private func sessionWithCookies(
+        _ cookies: [HTTPCookie],
+        requestTimeout: TimeInterval = 8
+    ) -> URLSession {
         let session = makeFreshSession(requestTimeout: requestTimeout)
 
         if let storage = session.configuration.httpCookieStorage {
             for cookie in cookies { storage.setCookie(cookie) }
         }
 
-        return try await fetchJSON(session, "\(base)/api/model.json")
+        return session
     }
 
     /// Returns `true` when `session.userRole` is "Admin". The router returns
@@ -292,6 +424,57 @@ actor NetgearProvider: RouterProvider {
             throw ProviderError(
                 "NETGEAR login failed — check username / password in Settings"
             )
+        }
+    }
+
+    /// POSTs a form-encoded write to `/Forms/config` on an already
+    /// authenticated session.
+    ///
+    /// The router answers with a redirect to `ok_redirect` / `err_redirect`,
+    /// which URLSession follows transparently — so a rejected write arrives
+    /// as HTTP 200 carrying an `errno` payload, not as an error status. Both
+    /// failure shapes are checked.
+    private func postConfig(
+        _ session: URLSession,
+        baseURL: String,
+        secToken: String,
+        fields: [String: String]
+    ) async throws {
+        guard let url = URL(string: "\(baseURL)/Forms/config") else {
+            throw ProviderError("Invalid router URL — check Settings")
+        }
+
+        var pairs: [(String, String)] = [
+            ("token",        secToken),
+            ("ok_redirect",  "/success.json"),
+            ("err_redirect", "/error.json"),
+        ]
+        pairs.append(contentsOf: fields.sorted { $0.key < $1.key })
+
+        let body: String = pairs
+            .map { key, val in "\(key)=\(formEncode(val))" }
+            .joined(separator: "&")
+
+        var req = URLRequest(url: url)
+
+        req.httpMethod = "POST"
+        req.setValue(
+            "application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type"
+        )
+        req.httpBody = body.data(using: .utf8)
+
+        let (data, response) = try await session.data(for: req)
+
+        let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+
+        if statusCode < 200 || statusCode >= 300 {
+            throw ProviderError("Router rejected the request (HTTP \(statusCode))")
+        }
+
+        if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let errno = json["errno"] {
+            let detail = json["errdetail"] as? String ?? String(describing: errno)
+            throw ProviderError("Router rejected the request (\(detail))")
         }
     }
 

@@ -30,10 +30,43 @@ protocol RouterProvider: Sendable {
     /// Async so that actor-based providers can satisfy it with an isolated
     /// method (state mutation is then serialised with in-flight fetches).
     func flushAuth() async
+
+    /// Marks a single received text message as read on the router.
+    ///
+    /// - Parameters:
+    ///   - id:      The message identifier as reported in `RouterMetrics.smsMessages`.
+    ///   - config:  The hotspot configuration (credentials, vendor, etc.).
+    ///   - baseURL: Resolved admin URL for the router.
+    /// - Throws: `ProviderError` when the router rejects the write, or
+    ///           `URLError` for transport-level issues.
+    func markSMSRead(id: String, config: HotspotConfig, baseURL: String) async throws
+
+    /// Deletes every text message currently stored on the router.
+    ///
+    /// - Parameters:
+    ///   - config:  The hotspot configuration (credentials, vendor, etc.).
+    ///   - baseURL: Resolved admin URL for the router.
+    /// - Returns: The router's state as read back *after* the wipe, so the
+    ///            caller can publish the authoritative message list without
+    ///            paying for a second round-trip.
+    /// - Throws: `ProviderError` when the router rejects the delete, or
+    ///           `URLError` for transport-level issues.
+    func deleteAllSMS(config: HotspotConfig, baseURL: String) async throws -> RouterMetrics
 }
 
 extension RouterProvider {
     func flushAuth() async {}
+
+    /// Vendors without an SMS write API inherit this. Surfaced to the user
+    /// rather than silently ignored, so a half-supported router is obvious.
+    func markSMSRead(id: String, config: HotspotConfig, baseURL: String) async throws {
+        throw ProviderError("This router does not support marking messages as read")
+    }
+
+    /// Vendors without an SMS write API inherit this.
+    func deleteAllSMS(config: HotspotConfig, baseURL: String) async throws -> RouterMetrics {
+        throw ProviderError("This router does not support deleting messages")
+    }
 }
 
 // MARK: - Provider error

@@ -105,6 +105,95 @@ final class RouterService {
         }
     }
 
+    // MARK: - SMS actions
+
+    /// Marks a text message as read on the router.
+    ///
+    /// The flag is flipped locally first so the list row and the menu-bar
+    /// unread badge react instantly, then written to the router; a failed
+    /// write is rolled back. A successful one is followed by a refresh so the
+    /// router stays the source of truth.
+    ///
+    /// - Returns: `nil` on success, a human-readable error string on failure.
+    @discardableResult
+    func markSMSRead(id: String) async -> String? {
+        guard let config = currentConfig,
+              let provider = providers[config.vendor] else { return nil }
+
+        // Unknown id, or the router already considers it read — nothing to do.
+        // This also collapses repeat calls for a message opened twice.
+        guard AppState.shared.metrics?
+            .smsMessages.first(where: { $0.id == id })?.isRead == false else { return nil }
+
+        setLocalReadFlag(id: id, isRead: true)
+
+        do {
+            try await provider.markSMSRead(
+                id: id, config: config, baseURL: baseURL(for: config)
+            )
+        } catch {
+            setLocalReadFlag(id: id, isRead: false)
+
+            return Self.humanReadable(error)
+        }
+
+        // Reconcile: the router recomputes the unread count, and messages may
+        // have arrived while the write was in flight.
+        refresh()
+
+        return nil
+    }
+
+    /// Deletes every text message stored on the router.
+    ///
+    /// Unlike `markSMSRead` this is not optimistic: the write can fail, so
+    /// nothing is cleared locally. The provider reads `model.json` back once
+    /// the router confirms the wipe and returns that snapshot, which is
+    /// published here — so by the time this returns the UI already shows the
+    /// authoritative list. A failure falls back to a plain refresh.
+    ///
+    /// - Returns: `nil` on success, a human-readable error string on failure.
+    @discardableResult
+    func deleteAllSMS() async -> String? {
+        guard let config = currentConfig,
+              let provider = providers[config.vendor] else { return nil }
+
+        do {
+            let metrics = try await provider.deleteAllSMS(
+                config: config, baseURL: baseURL(for: config)
+            )
+
+            AppState.shared.metrics     = metrics
+            AppState.shared.lastUpdated = Date()
+
+            return nil
+        } catch {
+            // Resync: the wipe may have landed partially, or not at all.
+            refresh()
+
+            return Self.humanReadable(error)
+        }
+    }
+
+    /// Flips the read flag of one message inside the published metrics and
+    /// keeps `smsUnreadCount` in sync. No-op when the message is gone or
+    /// already in the requested state.
+    ///
+    /// Republishing `metrics` re-runs the observers of `AppState.$metrics`,
+    /// but every value other than the SMS flags is identical — notification
+    /// transitions don't fire and the session tracker just re-samples the
+    /// same signal reading.
+    private func setLocalReadFlag(id: String, isRead: Bool) {
+        guard var metrics = AppState.shared.metrics,
+              let index = metrics.smsMessages.firstIndex(where: { $0.id == id }),
+              metrics.smsMessages[index].isRead != isRead else { return }
+
+        metrics.smsMessages[index].isRead = isRead
+        metrics.smsUnreadCount = max(0, metrics.smsUnreadCount + (isRead ? -1 : 1))
+
+        AppState.shared.metrics = metrics
+    }
+
     /// Cancels all in-flight and scheduled work. Cancellation propagates
     /// into URLSession, so an in-flight HTTP cycle aborts promptly; its
     /// post-await cancellation guards prevent it from publishing anything.

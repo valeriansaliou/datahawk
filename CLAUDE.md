@@ -51,12 +51,14 @@ Sources/
 ├── Models/
 │   ├── RouterMetrics.swift             # Value type: one poll cycle's worth of data
 │   ├── HotspotConfig.swift             # Codable config per router (stored in UserDefaults)
-│   └── SessionRecord.swift             # SessionRecord + SessionLocation value types
+│   ├── SessionRecord.swift             # SessionRecord + SessionLocation value types
+│   └── SMSMessage.swift                # Value type for one router-reported SMS (no local persistence)
 │
 ├── Services/
 │   ├── ConfigStore.swift               # UserDefaults persistence for hotspots + options (passwords → Keychain)
 │   ├── KeychainStore.swift             # Generic-password Keychain wrapper (secrets storage)
 │   ├── RouterService.swift             # Polling loop, error formatting
+│   ├── RouterLock.swift                # Global FIFO async mutex — one router flow at a time
 │   ├── WiFiMonitor.swift               # NWPathMonitor + CoreWLAN BSSID detection
 │   ├── LocationPermissionManager.swift # CLLocationManager wrapper (needed for bssid())
 │   ├── UpdateChecker.swift             # Polls GitHub Releases for newer DMGs
@@ -69,7 +71,7 @@ Sources/
 ├── Providers/
 │   ├── RouterProvider.swift            # Protocol + ProviderError
 │   └── Netgear/
-│       ├── NetgearProvider.swift       # Auth flow, cookie cache, URLSession factory
+│       ├── NetgearProvider.swift       # Auth flow, cookie cache, URLSession factory, /Forms/config writes
 │       └── NetgearMetricsParser.swift  # model.json → RouterMetrics + JSON path helpers
 │
 └── UI/
@@ -82,6 +84,8 @@ Sources/
     ├── SettingsWindowController.swift  # Singleton NSWindow for settings
     ├── SessionsView.swift              # Map + List tabs, searchable Table, CSV export
     ├── SessionsWindowController.swift  # Singleton NSWindow for session history
+    ├── SMSView.swift                   # Text Messages master-detail (list + reader)
+    ├── SMSWindowController.swift       # Singleton NSWindow for text messages
     └── WiFiQRWindowController.swift    # Singleton NSWindow for WiFi QR code
 ```
 
@@ -103,6 +107,7 @@ All singletons use `static let shared`:
 - `AppState.shared` — runtime state (ObservableObject)
 - `ConfigStore.shared` — UserDefaults persistence (ObservableObject)
 - `RouterService.shared` — polling loop
+- `RouterLock.shared` — global FIFO async mutex serialising all router traffic
 - `LocationPermissionManager.shared` — CLLocationManager wrapper
 - `SessionStore.shared` — JSONL session persistence (ObservableObject)
 - `SessionTracker.shared` — Combine pipelines for open/close + signal sampling + location
@@ -183,7 +188,17 @@ Fast path: inject cached cookies → single `GET /api/model.json`. Up to 2 attem
 **Credentials:** router admin passwords live in the Keychain, one generic-password item per hotspot (`hotspot-password.<uuid>`, service `com.datahawk.app`). `HotspotConfig`'s custom Codable never encodes the password; `ConfigStore.load()` reads it back from the Keychain, and migrates any legacy plain-text password found in the JSON on first load.
 
 ### Fetch serialisation
-HTTP cycles serialise on the `NetgearProvider` actor: a competing `fetchMetrics` call queues behind the in-flight one instead of aborting it, so there is no explicit single-flight gate. `RouterService.refresh()` additionally no-ops while `AppState.isFetching` is true to avoid queueing duplicate cycles. Cancelled cycles (`stop()` / hotspot switch) are guarded by `Task.isCancelled` checks after every await so they never publish stale state into `AppState`.
+
+**`RouterLock.shared` is a global FIFO async mutex, and every provider entry point holds it for its whole duration** — `fetchMetrics`, `markSMSRead`, `deleteAllSMS`. Exactly one flow is on the wire at any moment, app-wide.
+
+Actor isolation is *not* sufficient here: actors are reentrant and release at every `await`, so two `markSMSRead` calls interleave as `GET₁ GET₂ POST₁ POST₂` — and since the CSRF token rotates per `model.json` response, POST₂ then carries a token POST₁ invalidated and the router rejects it. That was the cause of rows flipping back to unread when arrowing quickly through the SMS list. For the same reason the lock must wrap the **whole block** (token read + write); guarding individual requests still permits that interleaving.
+
+- `acquire()` suspends, `release()` is synchronous so call sites can use `defer` (an actor-based lock can't — `defer` cannot await).
+- Ownership passes directly from `release()` to the longest-waiting caller (`isHeld` stays `true`), so newcomers can't barge.
+- A guarded block must never call another guarded block — that deadlocks.
+- Cancellation isn't special-cased: a cancelled waiter keeps its place, then runs a body that fails fast, and `defer` still releases.
+
+`RouterService.refresh()` additionally no-ops while `AppState.isFetching` is true to avoid queueing duplicate cycles. Cancelled cycles (`stop()` / hotspot switch) are guarded by `Task.isCancelled` checks after every await so they never publish stale state into `AppState`.
 
 ### Error handling flow
 ```
@@ -269,6 +284,33 @@ AppState.$connectionState (scan → previous, current)
 
 Cluster centre coordinates are the first session that founded the cluster; the cluster's `id` and `latestSignal`/`latestGeneration` track the newest representative session for pin styling and tap navigation. Two sessions are merged into the same cluster when within `distanceThreshold` (20 m).
 
+### SMS flow
+
+Messages are **not** persisted locally — `sms.msgs` is re-parsed from `model.json` on every poll cycle, so the router is always the source of truth. `RouterMetrics` carries `smsReady`, `smsUnreadCount`, `smsTotalCount` and `smsMessages`.
+
+Two write actions are implemented: **mark as read** and **delete all** (deleting a single message and sending are not).
+
+**Mark as read.** Selecting an unread row in `SMSView` calls (the whole provider flow runs under `RouterLock`, so rapid arrow-key selection can't overlap two writes):
+
+```
+SMSView (list selection)
+    → RouterService.markSMSRead(id:)          # optimistic local flip, then write
+        → NetgearProvider.markSMSRead(...)
+            → authenticatedSession(...)        # cached cookie, else fullAuth()
+            → POST /Forms/config  sms.readId=<id>
+        → RouterService.refresh()              # reconcile with the router
+```
+
+- `RouterService.setLocalReadFlag(id:isRead:)` flips `isRead` and adjusts `smsUnreadCount` inside the published `metrics` **before** the HTTP call, so the row and the menu-bar badge react instantly. A rejected write is rolled back and the reason is returned to the caller (`SMSView` shows it in a red banner); a successful one is followed by `refresh()`.
+- `markSMSRead` returns early when the id is unknown or already read, which also collapses repeat selections of the same message.
+- `NetgearProvider.postConfig(...)` is the generic `/Forms/config` write primitive (token + `ok_redirect` + `err_redirect` + fields). The router follows the redirect, so **a rejected write arrives as HTTP 200 with an `errno` body** — both the status code and the payload are checked.
+- The CSRF token must come from the same `model.json` round-trip that proved the session is authenticated (`authenticatedSession` returns both together); it rotates per response.
+- Both `RouterProvider.markSMSRead` and `RouterProvider.deleteAllSMS` have default implementations that throw "not supported", so new vendors opt in explicitly.
+
+**Delete all.** The header button in `SMSView` (confirmation alert → `RouterService.deleteAllSMS()`) wipes the router's inbox in a single `sms.deleteAll=1` write — no per-message loop. `NetgearProvider.deleteAllSMS` then re-reads `model.json` to (a) verify the inbox is actually empty (a surviving message throws) and (b) **return the post-delete `RouterMetrics`**, which `RouterService` publishes directly. That read-back is why `deleteAllSMS` is the one provider entry point returning a value: the caller gets the authoritative list without a second round-trip.
+
+Unlike mark-as-read this is **not** optimistic: nothing is cleared locally, the published list is replaced only by the metrics the router hands back. A failure falls back to `refresh()`. `SMSView` disables the list and swaps the Delete All button's trash icon for an inline spinner until the read-back lands; the button is hidden entirely when the inbox is empty.
+
 ### Update flow
 `UpdateChecker` (enum namespace) hits the GitHub Releases API for `valeriansaliou/datahawk` and finds the first asset whose name ends with `.dmg`. Two entry points:
 - `checkForUpdates()` — called once at launch with a 5 s delay. Silent; sets `AppState.updateDownloadURL` if a newer release exists, which lights up `UpdateAvailableSection` in the popover.
@@ -292,6 +334,7 @@ Version comparison: `versionComponents(_:)` strips a leading `v`, splits on `.`,
 | Full-auth request timeout | 8 s | NetgearProvider |
 | Login POST timeout | 60 s | NetgearProvider |
 | Wait after double timeout | 10 s | NetgearProvider |
+
 | Battery low threshold (default) | 20% | RouterMetrics |
 | Data bar: green→orange | 70% | DataUsageBar |
 | Data bar: orange→red | 90% | DataUsageBar |
@@ -402,6 +445,9 @@ The Sessions map button in `AdminButtonSection` is conditional on `ConfigStore.r
 - **Geocoder callback can outlive its session.** `SessionTracker.locationManager(_:didUpdateLocations:)` captures the session ID before calling `geocode(...)` and bails in the callback if `activeSession?.id` no longer matches. Without this, a slow geocode for a *previous* session would stamp its name onto whatever session is active when the callback fires. The geocoded name for the original session is lost (rare, since geocoding usually completes in 1–3 s and the move threshold is 100 m).
 - **`closeOrphanedSessions()` runs unconditionally at launch.** It does NOT gate on `recordSessionHistory`, otherwise orphans get stranded forever once the user turns the toggle off.
 - **macOS location-auth check is `.authorizedAlways` only.** `.authorized` is a deprecated iOS alias; `.authorizedWhenInUse` doesn't exist on macOS. Don't add either back to `isLocationAuthorized`.
+- **`NetgearProvider` is an actor, but actors are reentrant — `RouterLock` is what actually serialises router traffic.** Never rely on actor isolation to keep a multi-request flow atomic. Any new provider entry point must take the lock; any helper called from inside one must not.
+- **`deleteAllSMS` holds `RouterLock` across its write *and* its read-back.** Polls queue behind it and the menu-bar spinner stays up meanwhile — intended, so a poll can't republish rows the router just deleted. The same applies to the 10 s wait in `fetchMetrics`'s `.timedOut` branch.
+- **Optimistic SMS writes republish the whole `metrics` value.** `RouterService.setLocalReadFlag` copies, mutates and reassigns `AppState.metrics`, so every `$metrics` observer re-runs. That's safe today only because nothing but the SMS fields changed (notification pipelines compare transitions, `SessionTracker` just re-samples the same signal bars). Anything added to those pipelines that reacts to *emissions* rather than *changes* will misfire here.
 - **JSONL append on main thread.** `SessionStore.appendLine` does synchronous file I/O on the main thread. Writes are small (one JSON line) so latency is sub-millisecond on local disk — acceptable for now. If profiling ever shows this on a hot path, move to a serial background queue.
 - **CSV `Duration` column has a dead em-dash branch.** `session.duration == nil` iff `endDate == nil` iff `isActive == true`, so the `"\u{2014}"` fallback is unreachable. Kept as a defensive default.
 
