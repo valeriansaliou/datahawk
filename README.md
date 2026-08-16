@@ -56,6 +56,7 @@ _A NETGEAR Nighthawk M3. DataHawk is extensible, you can easily add support for 
   - See all your measured signal quality on a map so that you know which coffee shop has the best signal!
   - View all past sessions in a table format and export to CSV
   - _This feature can be disabled if you do not like it_
+- ✅ **View your text messages** — view the SMS messages received by your router, and mark them as read or delete them
 - ✅ **WiFi QR share** — option-click the icon (or use the QR button) to show a scannable QR code for joining the router's WiFi
 
 ## Install
