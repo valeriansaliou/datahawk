@@ -10,6 +10,7 @@
 //   - Disconnected          : faded normal antenna at 35 % opacity
 //   - Failed                : faded normal antenna at 35 % opacity
 //   - Loading               : antenna blinking (caller varies alpha via opacity)
+//   - Connected (offloading): wave icon (template) — not on cellular
 //   - Connected (no signal) : faded cellular-bars at 35 % opacity
 //   - Connected (signal)    : text badge ("5G", "4G", ...) coloured by alerts
 
@@ -28,13 +29,17 @@ enum IconRenderer {
     ///   - highDataUsage:      When `true` the badge is rendered in orange.
     ///   - routerNotConnected: When `true` the text badge is rendered at 35 % opacity.
     ///   - simLocked:          When `true` an orange SIM card icon is shown.
+    ///   - offloading:         When `true` a wave icon replaces the network badge —
+    ///                         the cellular generation is irrelevant while the
+    ///                         router routes over Ethernet or upstream WiFi.
     static func icon(
         state: ConnectionState,
         networkType: NetworkType?,
         batteryLow: Bool = false,
         highDataUsage: Bool = false,
         routerNotConnected: Bool = false,
-        simLocked: Bool = false
+        simLocked: Bool = false,
+        offloading: Bool = false
     ) -> NSImage {
         switch state {
         case .noHotspot:
@@ -49,7 +54,8 @@ enum IconRenderer {
             return sfSymbol("antenna.radiowaves.left.and.right")
 
         case .connected:
-            if simLocked { return tintedSFIcon("simcard", color: .orange) }
+            if simLocked  { return tintedSFIcon("simcard", color: .orange) }
+            if offloading { return sfSymbol("wave.3.right") }
 
             let type = networkType ?? .unknown
 

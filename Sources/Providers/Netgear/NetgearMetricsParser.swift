@@ -117,6 +117,35 @@ extension NetgearProvider {
         let routerTemperature  = numberValue(model, "general.devTemperature")
         let deviceTempCritical = boolValue(model, "power.deviceTempCritical") ?? false
 
+        // -- Offload ------------------------------------------------------------
+        // Ethernet offload wins when the router reports both links.
+        // WiFi offload is only live when the feature is enabled, the radio
+        // reports "On", and the router actually joined a network.
+        let ethernetOffload = (boolValue(model, "ethernet.offload.enabled") ?? false)
+            && (boolValue(model, "ethernet.offload.on") ?? false)
+
+        let wifiOffloadSupported = boolValue(model, "wifi.offload.supported") ?? false
+        let wifiOffloadEnabled   = boolValue(model, "wifi.offload.enabled") ?? false
+        let wifiOffloadStatus    = stringValue(model, "wifi.offload.status") ?? ""
+        let wifiOffloadSSID      = stringValue(model, "wifi.offload.connectionSsid") ?? ""
+        let wifiOffloadSecurity  = stringValue(model, "wifi.offload.securityStatus") ?? ""
+
+        let offload: OffloadLink? = {
+            if ethernetOffload { return .ethernet }
+
+            guard wifiOffloadSupported,
+                  wifiOffloadEnabled,
+                  wifiOffloadStatus.caseInsensitiveCompare("On") == .orderedSame,
+                  !wifiOffloadSSID.isEmpty else {
+                return nil
+            }
+
+            return .wifi(
+                ssid:   wifiOffloadSSID,
+                secure: wifiOffloadSecurity.caseInsensitiveCompare("Secured") == .orderedSame
+            )
+        }()
+
         // -- SMS ----------------------------------------------------------------
         let smsReady       = boolValue(model, "sms.ready") ?? false
         let smsUnreadCount = Int(numberValue(model, "sms.unreadMsgs") ?? 0)
@@ -144,6 +173,7 @@ extension NetgearProvider {
             wifiEnabled:              boolValue(model, "wifi.enabled") ?? false,
             wifiSSID:                 stringValue(model, "wifi.SSID"),
             wifiPassphrase:           stringValue(model, "wifi.passPhrase"),
+            offload:                  offload,
             firmwareUpdateAvailable:  firmwareUpdateAvailable,
             adminURL:                 baseURL,
             uptimeSeconds:            uptimeSeconds,

@@ -8,6 +8,13 @@
 
 import Foundation
 
+/// Upstream link the router offloads its WAN traffic to instead of using the
+/// cellular modem. Wired offload wins when the router reports both.
+enum OffloadLink: Equatable {
+    case ethernet
+    case wifi(ssid: String, secure: Bool)
+}
+
 struct RouterMetrics {
 
     // MARK: - Cellular connection
@@ -112,6 +119,16 @@ struct RouterMetrics {
 
     /// WiFi passphrase (`nil` when unavailable).
     var wifiPassphrase: String?
+
+    // MARK: - Offload
+
+    /// Upstream link currently carrying the router's WAN traffic in place of
+    /// the cellular modem. `nil` when the router is on cellular.
+    var offload: OffloadLink?
+
+    /// `true` when the router routes its traffic over an upstream Ethernet or
+    /// WiFi link instead of the cellular one.
+    var isOffloading: Bool { offload != nil }
 
     // MARK: - Firmware & admin
 

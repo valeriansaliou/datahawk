@@ -82,16 +82,12 @@ struct HeaderSection: View {
 
             Spacer()
 
-            // Roaming badge.
-            if state.metrics?.isRoaming == true {
-                Text("Roaming")
-                    .font(.caption)
-                    .fontWeight(.semibold)
-                    .foregroundColor(colorScheme == .dark ? .black : .white)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 5)
-                    .background(Color.orange)
-                    .clipShape(Capsule())
+            // Offloading badge — takes the roaming badge's slot when the router
+            // routes over an upstream WiFi network.
+            if state.metrics?.isOffloading == true {
+                badge("Offloading", color: .blue)
+            } else if state.metrics?.isRoaming == true {
+                badge("Roaming", color: .orange)
             }
 
             // Refresh button / spinner (hidden when not on a known hotspot).
@@ -120,6 +116,19 @@ struct HeaderSection: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 14)
+    }
+
+    // MARK: - Status pill
+
+    private func badge(_ label: String, color: Color) -> some View {
+        Text(label)
+            .font(.caption)
+            .fontWeight(.semibold)
+            .foregroundColor(colorScheme == .dark ? .black : .white)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(color)
+            .clipShape(Capsule())
     }
 
     // MARK: - Title (carrier + network type badge)

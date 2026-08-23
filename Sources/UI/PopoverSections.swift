@@ -141,6 +141,22 @@ struct MetricsSection: View {
     var body: some View {
         if let m = state.metrics {
             VStack(alignment: .leading, spacing: 0) {
+                // Group 0: upstream offload link (only while offloading).
+                if let offload = m.offload {
+                    metricGroup {
+                        metricRow("Offloading to") {
+                            HStack(spacing: 4) {
+                                Image(systemName: offloadIcon(offload))
+                                    .foregroundColor(offloadIconColor(offload))
+                                    .font(.system(size: 11))
+                                Text(offloadLabel(offload)).fontDesign(.monospaced)
+                            }
+                        }
+                    }
+
+                    Divider()
+                }
+
                 // Group 1: cellular connection info.
                 metricGroup {
                     if let name = state.activeHotspot?.name {
@@ -249,6 +265,28 @@ struct MetricsSection: View {
     }
 
     // MARK: - Formatters
+
+    private func offloadIcon(_ link: OffloadLink) -> String {
+        switch link {
+        case .ethernet:                return "network"
+        case .wifi(_, let secure):     return secure ? "wifi" : "wifi.exclamationmark"
+        }
+    }
+
+    /// Orange flags an unsecured upstream WiFi network.
+    private func offloadIconColor(_ link: OffloadLink) -> Color {
+        switch link {
+        case .ethernet:                return .blue
+        case .wifi(_, let secure):     return secure ? .blue : .orange
+        }
+    }
+
+    private func offloadLabel(_ link: OffloadLink) -> String {
+        switch link {
+        case .ethernet:            return "Ethernet"
+        case .wifi(let ssid, _):   return ssid
+        }
+    }
 
     private func signalLabel(_ bars: Int) -> String {
         switch bars {
