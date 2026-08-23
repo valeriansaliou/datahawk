@@ -17,8 +17,12 @@ import Combine
 final class NotificationManager {
     static let shared = NotificationManager()
 
-    /// Withdrawable alert — see `checkNoSignal` and `watchTransitions`.
-    private static let noSignalID = "com.datahawk.no-signal"
+    /// One case per alert the app can raise. Every alert is condition-driven:
+    /// raised on the rising edge, withdrawn as soon as the condition is false.
+    private enum Alert: String, CaseIterable {
+        case batteryLow = "com.datahawk.battery-low"
+        case noSignal   = "com.datahawk.no-signal"
+    }
 
     private var cancellables: Set<AnyCancellable> = []
 
@@ -73,46 +77,42 @@ final class NotificationManager {
             }
             .store(in: &cancellables)
 
-        // The no-signal alert is only meaningful while the hotspot is still
-        // there. Leaving the network (bag closed, drove off, hotspot switched)
-        // withdraws it rather than leaving a stale banner behind.
+        // Every alert describes the hotspot, so none of them survive losing it.
+        // Leaving the network (bag closed, drove off, hotspot switched) also
+        // means the last metrics are stale, so withdraw the lot.
         AppState.shared.$connectionState
             .sink { state in
                 MainActor.assumeIsolated {
                     guard state != .connected else { return }
-                    NotificationManager.withdraw(id: Self.noSignalID)
+                    Self.withdrawAll()
                 }
             }
             .store(in: &cancellables)
     }
 
     private func checkBatteryLow(previous: RouterMetrics?, current: RouterMetrics?) {
-        guard ConfigStore.shared.notifyBatteryLow else { return }
-        guard let current, current.isBatteryLow else { return }
-        guard previous?.isBatteryLow != true else { return }
+        guard let current else { return }
 
-        send(
-            id: "com.datahawk.battery-low",
+        evaluate(
+            .batteryLow,
+            wasActive: previous?.isBatteryLow ?? false,
+            isActive: current.isBatteryLow,
+            enabled: ConfigStore.shared.notifyBatteryLow,
             title: "Hotspot battery getting low",
             body: "Plug your router to power to stay connected."
         )
     }
 
     private func checkNoSignal(previous: RouterMetrics?, current: RouterMetrics?) {
-        // Recovery withdraws the alert even if the option was turned off in the
-        // meantime, so a delivered banner never outlives the condition.
         guard let current else { return }
 
-        guard current.networkType == .noSignal else {
-            Self.withdraw(id: Self.noSignalID)
-            return
-        }
-
-        guard ConfigStore.shared.notifyNoService else { return }
-        guard let previous, previous.networkType != .noSignal else { return }
-
-        send(
-            id: Self.noSignalID,
+        evaluate(
+            .noSignal,
+            // Treat "no previous sample" as already-active so the very first
+            // fetch after connecting doesn't alert about a pre-existing outage.
+            wasActive: previous.map { $0.networkType == .noSignal } ?? true,
+            isActive: current.networkType == .noSignal,
+            enabled: ConfigStore.shared.notifyNoService,
             title: "Cellular signal was lost",
             body: "You will be offline until your hotspot reconnects."
         )
@@ -120,16 +120,43 @@ final class NotificationManager {
 
     // MARK: - Dispatch
 
-    /// Pulls an already-delivered notification out of Notification Center (and
-    /// cancels it if it somehow hasn't been delivered yet).
-    private static func withdraw(id: String) {
-        let center = UNUserNotificationCenter.current()
+    /// Raises `alert` on the rising edge of its condition and withdraws it once
+    /// the condition clears. The withdrawal deliberately ignores `enabled`, so
+    /// switching the option off mid-alert can't strand a delivered banner.
+    private func evaluate(
+        _ alert: Alert,
+        wasActive: Bool,
+        isActive: Bool,
+        enabled: Bool,
+        title: String,
+        body: String
+    ) {
+        guard isActive else {
+            Self.withdraw(alert)
+            return
+        }
 
-        center.removeDeliveredNotifications(withIdentifiers: [id])
-        center.removePendingNotificationRequests(withIdentifiers: [id])
+        guard enabled, !wasActive else { return }
+
+        send(alert, title: title, body: body)
     }
 
-    private func send(id: String, title: String, body: String) {
+    /// Pulls an already-delivered notification out of Notification Center (and
+    /// cancels it if it somehow hasn't been delivered yet).
+    private static func withdraw(_ alert: Alert) {
+        let center = UNUserNotificationCenter.current()
+
+        center.removeDeliveredNotifications(withIdentifiers: [alert.rawValue])
+        center.removePendingNotificationRequests(withIdentifiers: [alert.rawValue])
+    }
+
+    private static func withdrawAll() {
+        Alert.allCases.forEach { withdraw($0) }
+    }
+
+    private func send(_ alert: Alert, title: String, body: String) {
+        let id = alert.rawValue
+
         let content = UNMutableNotificationContent()
         content.title = title
         content.body = body
