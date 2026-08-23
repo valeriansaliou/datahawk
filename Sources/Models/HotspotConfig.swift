@@ -26,7 +26,9 @@ struct HotspotConfig: Identifiable, Equatable {
     var name: String
 
     /// BSSID of the access point as seen by CoreWLAN, e.g. "aa:bb:cc:dd:ee:ff".
-    /// Used to auto-detect when this hotspot is in range.
+    /// Used to auto-detect when this hotspot is in range. May contain `*`
+    /// wildcards to cover a range of BSSIDs with a single entry, e.g.
+    /// "aa:bb:cc:dd:ee:*" for a router that hands out several BSSIDs.
     var macAddress: String
 
     /// Router manufacturer — determines which provider handles API calls.
@@ -42,11 +44,63 @@ struct HotspotConfig: Identifiable, Equatable {
     /// falls back to its default (e.g. "http://mywebui" for NETGEAR).
     var customBaseURL: String?
 
-    /// Normalised lower-case hex-only representation of the MAC address.
-    /// Strips colons, dashes, and spaces so that "AA:BB:CC:DD:EE:FF",
-    /// "aa-bb-cc-dd-ee-ff", and "aabbccddeeff" all compare equal.
+    /// Normalised lower-case representation of the MAC address: hex digits and
+    /// `*` wildcards only. Strips colons, dashes, and spaces so that
+    /// "AA:BB:CC:DD:EE:FF", "aa-bb-cc-dd-ee-ff", and "aabbccddeeff" all
+    /// compare equal.
     var normalizedMAC: String {
-        macAddress.lowercased().filter { $0.isHexDigit }
+        HotspotConfig.normalizeMAC(macAddress)
+    }
+
+    /// True when the configured address is a glob pattern rather than one
+    /// literal BSSID. Exact entries win over wildcards during lookup.
+    var hasMACWildcard: Bool {
+        normalizedMAC.contains("*")
+    }
+
+    /// Whether the given BSSID is covered by this hotspot's address pattern.
+    func matches(bssid: String) -> Bool {
+        HotspotConfig.glob(pattern: normalizedMAC,
+                           matches: HotspotConfig.normalizeMAC(bssid))
+    }
+
+    /// Lower-cases and drops every character that isn't a hex digit or `*`.
+    static func normalizeMAC(_ raw: String) -> String {
+        raw.lowercased().filter { $0.isHexDigit || $0 == "*" }
+    }
+
+    /// Minimal glob matcher — `*` matches any run of characters (including
+    /// none), every other character must match literally. Iterative with
+    /// backtracking, so it stays linear-ish and never recurses deeply.
+    static func glob(pattern: String, matches input: String) -> Bool {
+        let p = Array(pattern)
+        let s = Array(input)
+
+        var pi = 0, si = 0
+        var starPi = -1, starSi = 0
+
+        while si < s.count {
+            if pi < p.count, p[pi] == "*" {
+                starPi = pi
+                starSi = si
+                pi += 1
+            } else if pi < p.count, p[pi] == s[si] {
+                pi += 1
+                si += 1
+            } else if starPi >= 0 {
+                // Backtrack: let the last `*` swallow one more character.
+                starSi += 1
+                si = starSi
+                pi = starPi + 1
+            } else {
+                return false
+            }
+        }
+
+        // Trailing wildcards may still match the empty remainder.
+        while pi < p.count, p[pi] == "*" { pi += 1 }
+
+        return pi == p.count
     }
 }
 

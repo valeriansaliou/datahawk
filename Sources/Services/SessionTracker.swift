@@ -148,7 +148,11 @@ final class SessionTracker: NSObject, CLLocationManagerDelegate {
         var session = SessionRecord(
             startDate: Date(),
             hotspotName: AppState.shared.activeHotspot?.name ?? "",
-            hotspotBSSID: AppState.shared.activeHotspot?.normalizedMAC,
+            // Prefer the literal BSSID we're actually on: the hotspot's own
+            // address may be a wildcard pattern, which is useless as a record
+            // of where the session happened.
+            hotspotBSSID: AppState.shared.detectedBSSID.map(HotspotConfig.normalizeMAC)
+                ?? AppState.shared.activeHotspot?.normalizedMAC,
             provider: metrics?.provider,
             generation: metrics?.networkType.rawValue,
             isRoaming: metrics?.isRoaming,

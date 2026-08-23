@@ -109,9 +109,17 @@ final class ConfigStore: ObservableObject {
 
     /// Finds the hotspot whose normalised MAC matches the given BSSID.
     /// Comparison is case-insensitive and ignores separators (colons, dashes).
+    /// Configured addresses may contain `*` wildcards; an exact entry always
+    /// wins over a wildcard one, so a specific hotspot can be carved out of a
+    /// broader pattern.
     func hotspot(forBSSID bssid: String) -> HotspotConfig? {
-        let normalised = bssid.lowercased().filter { $0.isHexDigit }
-        return hotspots.first { $0.normalizedMAC == normalised }
+        let normalised = HotspotConfig.normalizeMAC(bssid)
+
+        if let exact = hotspots.first(where: { !$0.hasMACWildcard && $0.normalizedMAC == normalised }) {
+            return exact
+        }
+
+        return hotspots.first { $0.hasMACWildcard && $0.matches(bssid: normalised) }
     }
 
     // MARK: - Mutations

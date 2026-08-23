@@ -476,7 +476,7 @@ struct HotspotFormView: View {
     var body: some View {
         VStack(spacing: 0) {
             Form {
-                Section("Identity") {
+                Section {
                     TextField("Name (e.g. My Hotspot)", text: $name)
                     TextField("BSSID (aa:bb:cc:dd:ee:ff)", text: $macAddress)
                         .fontDesign(.monospaced)
@@ -485,6 +485,14 @@ struct HotspotFormView: View {
                             Text(v.rawValue).tag(v)
                         }
                     }
+                } header: {
+                    Text("Identity")
+                } footer: {
+                    // Verbatim: the asterisks would otherwise be parsed as
+                    // Markdown emphasis by LocalizedStringKey and vanish.
+                    Text(verbatim: "The BSSID accepts \u{201C}*\u{201D} wildcards, e.g. \u{201C}aa:bb:cc:dd:ee:*\u{201D} to match a router that broadcasts several addresses. An exact match always takes priority over a wildcard.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
                 }
 
                 Section("Credentials") {
