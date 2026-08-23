@@ -75,12 +75,15 @@ struct HeaderSection: View {
                 .foregroundColor(isInactive ? .secondary : .primary)
                 .frame(width: 24)
 
+            // Claims all the width the badge and refresh button don't need, so
+            // the subtitle only ever truncates when it genuinely runs out of
+            // room. A Spacer() here instead would keep a slice of that width
+            // for itself and ellipsize the text next to a 40 pt hole.
             VStack(alignment: .leading, spacing: 5) {
                 titleText
                 subtitleText
             }
-
-            Spacer()
+            .frame(maxWidth: .infinity, alignment: .leading)
 
             // Offloading badge — takes the roaming badge's slot when the router
             // routes over an upstream WiFi network.
