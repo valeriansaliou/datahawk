@@ -6,7 +6,9 @@
 // only when the user enables at least one notification option in Settings.
 // Notifications fire on state *transitions* — not on every polling cycle —
 // so the user is only alerted once per event, not repeatedly while the
-// condition persists.
+// condition persists. They are also withdrawn again as soon as the condition
+// clears (or the hotspot goes away), so a banner never outlives what it
+// reported — the lid may have been shut while the alert was on screen.
 
 @preconcurrency import UserNotifications
 import Combine
@@ -14,6 +16,9 @@ import Combine
 @MainActor
 final class NotificationManager {
     static let shared = NotificationManager()
+
+    /// Withdrawable alert — see `checkNoSignal` and `watchTransitions`.
+    private static let noSignalID = "com.datahawk.no-signal"
 
     private var cancellables: Set<AnyCancellable> = []
 
@@ -67,6 +72,18 @@ final class NotificationManager {
                 }
             }
             .store(in: &cancellables)
+
+        // The no-signal alert is only meaningful while the hotspot is still
+        // there. Leaving the network (bag closed, drove off, hotspot switched)
+        // withdraws it rather than leaving a stale banner behind.
+        AppState.shared.$connectionState
+            .sink { state in
+                MainActor.assumeIsolated {
+                    guard state != .connected else { return }
+                    NotificationManager.withdraw(id: Self.noSignalID)
+                }
+            }
+            .store(in: &cancellables)
     }
 
     private func checkBatteryLow(previous: RouterMetrics?, current: RouterMetrics?) {
@@ -82,18 +99,35 @@ final class NotificationManager {
     }
 
     private func checkNoSignal(previous: RouterMetrics?, current: RouterMetrics?) {
+        // Recovery withdraws the alert even if the option was turned off in the
+        // meantime, so a delivered banner never outlives the condition.
+        guard let current else { return }
+
+        guard current.networkType == .noSignal else {
+            Self.withdraw(id: Self.noSignalID)
+            return
+        }
+
         guard ConfigStore.shared.notifyNoService else { return }
-        guard let previous, let current else { return }
-        guard current.networkType == .noSignal, previous.networkType != .noSignal else { return }
+        guard let previous, previous.networkType != .noSignal else { return }
 
         send(
-            id: "com.datahawk.no-signal",
+            id: Self.noSignalID,
             title: "Cellular signal was lost",
             body: "You will be offline until your hotspot reconnects."
         )
     }
 
     // MARK: - Dispatch
+
+    /// Pulls an already-delivered notification out of Notification Center (and
+    /// cancels it if it somehow hasn't been delivered yet).
+    private static func withdraw(id: String) {
+        let center = UNUserNotificationCenter.current()
+
+        center.removeDeliveredNotifications(withIdentifiers: [id])
+        center.removePendingNotificationRequests(withIdentifiers: [id])
+    }
 
     private func send(id: String, title: String, body: String) {
         let content = UNMutableNotificationContent()

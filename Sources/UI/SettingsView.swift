@@ -542,6 +542,20 @@ struct HotspotFormView: View {
 
     // MARK: - Helpers
 
+    /// Replaces the last character of a detected BSSID with a `*`, since a
+    /// router usually broadcasts a small range of consecutive addresses (one
+    /// per band). Returns `nil` for a nil/empty input, and leaves an address
+    /// that already carries a wildcard untouched.
+    private static func wildcarded(_ bssid: String?) -> String? {
+        guard let bssid else { return nil }
+
+        let trimmed = bssid.trimmingCharacters(in: .whitespaces)
+
+        guard !trimmed.isEmpty, !trimmed.contains("*") else { return trimmed }
+
+        return trimmed.dropLast() + "*"
+    }
+
     /// Pre-fills form fields from the existing hotspot (edit) or from the
     /// currently detected WiFi BSSID/SSID (add).
     private func prefill() {
@@ -553,7 +567,7 @@ struct HotspotFormView: View {
             password      = h.password
             customBaseURL = h.customBaseURL ?? ""
         } else {
-            macAddress    = AppState.shared.detectedBSSID ?? ""
+            macAddress    = Self.wildcarded(AppState.shared.detectedBSSID) ?? ""
             name          = AppState.shared.detectedSSID  ?? ""
             username      = vendor == .netgear ? "Admin" : ""
             if let gw = WiFiMonitor.currentGatewayIP() {
