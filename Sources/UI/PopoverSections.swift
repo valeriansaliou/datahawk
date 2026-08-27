@@ -365,7 +365,7 @@ struct MetricsSection: View {
             Text(label)
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
-                .frame(width: 100, alignment: .leading)
+                .frame(width: 90, alignment: .leading)
 
             if isSpinner {
                 ProgressView()
