@@ -226,8 +226,11 @@ struct MetricsSection: View {
                 }
 
                 // Group 4: system info (uptime + temperatures).
+                let hasBatteryTemp = !m.noBattery && m.batteryTemperature != nil
+
                 let hasSystemInfo = m.uptimeSeconds != nil
                     || m.routerTemperature != nil
+                    || hasBatteryTemp
 
                 if hasSystemInfo {
                     Divider()
@@ -240,7 +243,7 @@ struct MetricsSection: View {
                         }
 
                         if let temp = m.routerTemperature {
-                            metricRow("Temperature") {
+                            metricRow("Device temp.") {
                                 let tempColor: Color? = m.deviceTempCritical
                                     ? .red
                                     : (temp > (m.useMetricSystem ? 55 : 130) ? .orange : nil)
@@ -254,6 +257,25 @@ struct MetricsSection: View {
                                     Text(formatTemperature(temp, metric: m.useMetricSystem))
                                         .fontDesign(.monospaced)
                                         .foregroundColor(tempColor)
+                                }
+                            }
+                        }
+
+                        if hasBatteryTemp, let battTemp = m.batteryTemperature {
+                            metricRow("Battery temp.") {
+                                let battTempColor: Color? = m.isBatteryTempAbnormal
+                                    ? .red
+                                    : (battTemp > (m.useMetricSystem ? 40 : 104) ? .yellow : nil)
+
+                                HStack(spacing: 4) {
+                                    if m.isBatteryTempAbnormal {
+                                        Image(systemName: "exclamationmark.circle.fill")
+                                            .foregroundColor(.red)
+                                            .font(.system(size: 11))
+                                    }
+                                    Text(formatTemperature(battTemp, metric: m.useMetricSystem))
+                                        .fontDesign(.monospaced)
+                                        .foregroundColor(battTempColor)
                                 }
                             }
                         }
@@ -343,7 +365,7 @@ struct MetricsSection: View {
             Text(label)
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
-                .frame(width: 90, alignment: .leading)
+                .frame(width: 100, alignment: .leading)
 
             if isSpinner {
                 ProgressView()

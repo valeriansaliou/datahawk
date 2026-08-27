@@ -54,7 +54,7 @@ struct PopoverView: View {
             Divider()
             FooterSection()
         }
-        .frame(width: 280)
+        .frame(width: 300)
     }
 }
 

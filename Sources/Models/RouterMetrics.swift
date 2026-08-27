@@ -152,6 +152,20 @@ struct RouterMetrics {
     /// `true` when the router reports a critical device temperature.
     var deviceTempCritical: Bool
 
+    /// Battery temperature in the unit selected by `useMetricSystem`, or `nil`
+    /// when unavailable (no battery inserted, or unsupported hardware).
+    var batteryTemperature: Double?
+
+    /// Raw battery temperature state reported by the router, e.g. `"Normal"`.
+    var batteryTempState: String?
+
+    /// `true` when the router reports a battery temperature state other than
+    /// "Normal" (only meaningful when a battery is inserted).
+    var isBatteryTempAbnormal: Bool {
+        guard !noBattery, let state = batteryTempState, !state.isEmpty else { return false }
+        return state.caseInsensitiveCompare("Normal") != .orderedSame
+    }
+
     // MARK: - SMS
 
     /// `true` when the router's SMS feature is supported and ready to use.

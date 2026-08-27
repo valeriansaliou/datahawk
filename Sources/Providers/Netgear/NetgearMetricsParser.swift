@@ -117,6 +117,9 @@ extension NetgearProvider {
         let routerTemperature  = numberValue(model, "general.devTemperature")
         let deviceTempCritical = boolValue(model, "power.deviceTempCritical") ?? false
 
+        let batteryTemperature = numberValue(model, "power.batteryTemperature")
+        let batteryTempState   = stringValue(model, "power.batteryTempState")
+
         // -- Offload ------------------------------------------------------------
         // Ethernet offload wins when the router reports both links.
         // WiFi offload is only live when the feature is enabled, the radio
@@ -180,6 +183,8 @@ extension NetgearProvider {
             routerTemperature:        routerTemperature,
             useMetricSystem:          useMetricSystem,
             deviceTempCritical:       deviceTempCritical,
+            batteryTemperature:       batteryTemperature,
+            batteryTempState:         batteryTempState,
             smsReady:                 smsReady,
             smsUnreadCount:           smsUnreadCount,
             smsTotalCount:            smsTotalCount,
