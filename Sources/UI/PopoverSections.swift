@@ -269,7 +269,7 @@ struct MetricsSection: View {
 
                                 HStack(spacing: 4) {
                                     if m.isBatteryTempAbnormal {
-                                        Image(systemName: "exclamationmark.circle.fill")
+                                        Image(systemName: "heat.waves")
                                             .foregroundColor(.red)
                                             .font(.system(size: 11))
                                     }
