@@ -89,6 +89,9 @@ struct RouterMetrics {
     /// `true` when the device is actively charging (battery present, on AC).
     var isCharging: Bool
 
+    /// Raw charge source reported by the router (e.g. `"QuickCharge"`, `"None"`).
+    var chargeSource: String
+
     /// `true` when the device has no battery slot (always on external power).
     var noBattery: Bool
 
@@ -96,8 +99,10 @@ struct RouterMetrics {
     var batteryLowThreshold: Int
 
     /// Convenience: `true` when the device is on external power — either
-    /// because it has no battery or because it is currently charging.
-    var isPluggedIn: Bool { noBattery || isCharging }
+    /// because it has no battery or because a charge source is attached.
+    var isPluggedIn: Bool {
+        noBattery || chargeSource.caseInsensitiveCompare("None") != .orderedSame
+    }
 
     /// `true` when the device is on battery power and below the router's
     /// configured low-battery threshold.

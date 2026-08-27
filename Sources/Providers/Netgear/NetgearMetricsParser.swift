@@ -77,6 +77,10 @@ extension NetgearProvider {
         let noBattery  = battState.caseInsensitiveCompare("NoBattery") == .orderedSame
         let isCharging = boolValue(model, "power.charging") ?? false
 
+        // battChargeSource == "None" → running on battery; anything else is
+        // an attached power source (USB QuickCharge).
+        let chargeSource = stringValue(model, "power.battChargeSource") ?? "None"
+
         // Show percentage even when charging; nil only when there's no battery.
         let batteryPercent: Int? = noBattery
             ? nil
@@ -170,6 +174,7 @@ extension NetgearProvider {
             dataHighUsageWarningPct:  dataHighUsageWarningPct,
             batteryPercent:           batteryPercent,
             isCharging:               isCharging,
+            chargeSource:             chargeSource,
             noBattery:                noBattery,
             batteryLowThreshold:      batteryLowThreshold,
             connectedUsers:           connectedUsers,
