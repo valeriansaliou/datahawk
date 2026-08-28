@@ -81,6 +81,10 @@ extension NetgearProvider {
         // an attached power source (USB QuickCharge).
         let chargeSource = stringValue(model, "power.battChargeSource") ?? "None"
 
+        // battChargeAlgorithm == "Heat" → charging is throttled or halted while
+        // the battery cools down.
+        let chargeAlgorithm = stringValue(model, "power.battChargeAlgorithm")
+
         // Show percentage even when charging; nil only when there's no battery.
         let batteryPercent: Int? = noBattery
             ? nil
@@ -175,6 +179,7 @@ extension NetgearProvider {
             batteryPercent:           batteryPercent,
             isCharging:               isCharging,
             chargeSource:             chargeSource,
+            chargeAlgorithm:          chargeAlgorithm,
             noBattery:                noBattery,
             batteryLowThreshold:      batteryLowThreshold,
             connectedUsers:           connectedUsers,

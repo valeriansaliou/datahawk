@@ -92,6 +92,9 @@ struct RouterMetrics {
     /// Raw charge source reported by the router (e.g. `"QuickCharge"`, `"None"`).
     var chargeSource: String
 
+    /// Raw charge algorithm reported by the router (e.g. `"Normal"`, `"Heat"`).
+    var chargeAlgorithm: String?
+
     /// `true` when the device has no battery slot (always on external power).
     var noBattery: Bool
 
@@ -102,6 +105,13 @@ struct RouterMetrics {
     /// because it has no battery or because a charge source is attached.
     var isPluggedIn: Bool {
         noBattery || chargeSource.caseInsensitiveCompare("None") != .orderedSame
+    }
+
+    /// `true` when the router is charging under its heat-mitigation algorithm —
+    /// charging is slowed down or paused until the battery cools off.
+    var isHeatThrottledCharging: Bool {
+        guard isCharging, let algorithm = chargeAlgorithm else { return false }
+        return algorithm.caseInsensitiveCompare("Heat") == .orderedSame
     }
 
     /// `true` when the device is on battery power and below the router's

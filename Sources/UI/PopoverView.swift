@@ -192,6 +192,12 @@ struct HeaderSection: View {
                     Image(systemName: batteryIconName(m))
                         .font(.system(size: 15.5))
                         .foregroundColor(batteryIconColor(m))
+                    if m.isHeatThrottledCharging {
+                        Image(systemName: "heat.waves")
+                            .font(.system(size: 10.5))
+                            .foregroundColor(m.isBatteryLow ? .red : .secondary)
+                            .help("Charging slowed down or paused: battery is too hot")
+                    }
                     Text(batteryStateText(m))
                         .font(.caption)
                         .foregroundColor(m.isBatteryLow ? .red : .secondary)
