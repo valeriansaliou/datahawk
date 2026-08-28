@@ -126,6 +126,11 @@ struct RouterMetrics {
     /// Number of clients currently connected to the router's WiFi.
     var connectedUsers: Int
 
+    /// Clients currently connected to the router, when it reports a list.
+    /// May be empty even though `connectedUsers` is non-zero (the router only
+    /// exposes the detailed list to authenticated sessions on some firmwares).
+    var clients: [WiFiClient]
+
     /// Whether the router's WiFi radio is on.
     var wifiEnabled: Bool
 

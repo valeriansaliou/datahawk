@@ -95,6 +95,8 @@ extension NetgearProvider {
         )
 
         // -- Connected clients ------------------------------------------------
+        let clients = parseClients(model)
+
         let connectedUsers = Int(numberValue(
             model,
             "router.clientList.count",
@@ -183,6 +185,7 @@ extension NetgearProvider {
             noBattery:                noBattery,
             batteryLowThreshold:      batteryLowThreshold,
             connectedUsers:           connectedUsers,
+            clients:                  clients,
             wifiEnabled:              boolValue(model, "wifi.enabled") ?? false,
             wifiSSID:                 stringValue(model, "wifi.SSID"),
             wifiPassphrase:           stringValue(model, "wifi.passPhrase"),
@@ -255,6 +258,44 @@ extension NetgearProvider {
                 sender:  entry["sender"] as? String ?? "",
                 isRead:  (entry["read"] as? Bool) ?? false
             )
+        }
+    }
+}
+
+// MARK: - Client list parser
+
+extension NetgearProvider {
+
+    /// Parses `router.clientList` into `WiFiClient` values.
+    ///
+    /// The router pads the array with empty objects (`{}`) — those carry no
+    /// identity at all and are skipped. Some firmwares wrap the list in an
+    /// object instead of exposing a bare array (the same path also serves
+    /// `router.clientList.count`), so both shapes are handled.
+    func parseClients(_ model: [String: Any]) -> [WiFiClient] {
+        let rawList: [Any]
+
+        switch nestedValue(model, "router.clientList") {
+        case let array as [Any]:
+            rawList = array
+        case let dict as [String: Any]:
+            // Wrapped shape: pick the first array-valued member.
+            rawList = dict.values.compactMap { $0 as? [Any] }.first ?? []
+        default:
+            return []
+        }
+
+        return rawList.compactMap { entry -> WiFiClient? in
+            guard let fields = entry as? [String: Any] else { return nil }
+
+            let name = (fields["name"] as? String) ?? ""
+            let ip   = (fields["IP"] as? String) ?? ""
+            let mac  = (fields["MAC"] as? String) ?? ""
+
+            // Placeholder entry — nothing to show.
+            guard !name.isEmpty || !ip.isEmpty || !mac.isEmpty else { return nil }
+
+            return WiFiClient(name: name, ipAddress: ip, macAddress: mac)
         }
     }
 }

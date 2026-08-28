@@ -195,7 +195,27 @@ struct MetricsSection: View {
                     }
 
                     metricRow("WiFi users") {
-                        Text("\(m.connectedUsers)").fontDesign(.monospaced)
+                        HStack(spacing: 4) {
+                            Text("\(m.connectedUsers)").fontDesign(.monospaced)
+
+                            if m.connectedUsers > 0, !m.clients.isEmpty {
+                                Button {
+                                    NotificationCenter.default.post(
+                                        name: .datahawkHidePopover, object: nil
+                                    )
+                                    WiFiUsersWindowController.shared.show()
+                                } label: {
+                                    Image(systemName: "arrow.forward.circle.dotted")
+                                        .font(.system(size: 10.5))
+                                }
+                                .buttonStyle(.plain)
+                                .foregroundStyle(.secondary)
+                                .help("See connected clients")
+                                .onHover { inside in
+                                    if inside { NSCursor.pointingHand.push() } else { NSCursor.pop() }
+                                }
+                            }
+                        }
                     }
                 }
 
