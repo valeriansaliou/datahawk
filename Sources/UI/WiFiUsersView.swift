@@ -36,7 +36,7 @@ struct WiFiUsersView: View {
     private var table: some View {
         Table(clients, selection: $selectedID, sortOrder: $sortOrder) {
             TableColumn("Client Name", value: \.name) { c in
-                Text(c.name.isEmpty ? "Unknown device" : c.name)
+                Text(c.name.isEmpty ? "Unknown" : c.name)
                     .font(cellFont)
                     .foregroundStyle(c.name.isEmpty ? AnyShapeStyle(.tertiary) : AnyShapeStyle(.primary))
             }
@@ -100,7 +100,7 @@ struct WiFiUsersView: View {
 
     private func clientAsText(_ c: WiFiClient) -> String {
         """
-        Name: \(c.name.isEmpty ? "Unknown device" : c.name)
+        Name: \(c.name.isEmpty ? "Unknown" : c.name)
         IP: \(c.ipAddress.isEmpty ? "\u{2014}" : c.ipAddress)
         MAC: \(c.macAddress.isEmpty ? "\u{2014}" : c.macAddress.uppercased())
         """

@@ -288,7 +288,11 @@ extension NetgearProvider {
         return rawList.compactMap { entry -> WiFiClient? in
             guard let fields = entry as? [String: Any] else { return nil }
 
-            let name = (fields["name"] as? String) ?? ""
+            // The router uses "*" for a client whose name it doesn't know —
+            // normalised to empty so the UI's unknown-name branch handles it.
+            var name = (fields["name"] as? String) ?? ""
+            if name == "*" { name = "" }
+
             let ip   = (fields["IP"] as? String) ?? ""
             let mac  = (fields["MAC"] as? String) ?? ""
 
