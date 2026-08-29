@@ -221,6 +221,9 @@ struct HeaderSection: View {
     }
 
     private func batteryIconName(_ m: RouterMetrics) -> String {
+        // Batteryless devices run straight off external power — a battery
+        // glyph would be misleading there.
+        if m.noBattery   { return "powerplug" }
         if m.isPluggedIn { return "battery.100percent.bolt" }
 
         switch m.batteryPercent ?? 0 {
@@ -233,6 +236,7 @@ struct HeaderSection: View {
     }
 
     private func batteryIconColor(_ m: RouterMetrics) -> Color {
+        if m.noBattery     { return .blue }
         if m.isPluggedIn   { return .green }
         return m.isBatteryLow ? .red : .secondary
     }
