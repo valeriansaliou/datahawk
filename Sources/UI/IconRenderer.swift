@@ -13,6 +13,10 @@
 //   - Connected (offloading): wave icon (template) — not on cellular
 //   - Connected (no signal) : faded cellular-bars at 35 % opacity
 //   - Connected (signal)    : text badge ("5G", "4G", ...) coloured by alerts
+//
+// A faded "heat.waves" glyph is appended to the right of the connected icon
+// whenever the router reports a critical device temperature or an abnormal
+// battery temperature.
 
 import AppKit
 
@@ -32,6 +36,8 @@ enum IconRenderer {
     ///   - offloading:         When `true` a wave icon replaces the network badge —
     ///                         the cellular generation is irrelevant while the
     ///                         router routes over Ethernet or upstream WiFi.
+    ///   - overheating:        When `true` a faded heat glyph is appended to the
+    ///                         right of the connected icon.
     static func icon(
         state: ConnectionState,
         networkType: NetworkType?,
@@ -39,7 +45,32 @@ enum IconRenderer {
         highDataUsage: Bool = false,
         routerNotConnected: Bool = false,
         simLocked: Bool = false,
-        offloading: Bool = false
+        offloading: Bool = false,
+        overheating: Bool = false
+    ) -> NSImage {
+        let base = baseIcon(
+            state: state,
+            networkType: networkType,
+            batteryLow: batteryLow,
+            highDataUsage: highDataUsage,
+            routerNotConnected: routerNotConnected,
+            simLocked: simLocked,
+            offloading: offloading
+        )
+
+        guard overheating, case .connected = state else { return base }
+
+        return appendingHeatGlyph(to: base)
+    }
+
+    private static func baseIcon(
+        state: ConnectionState,
+        networkType: NetworkType?,
+        batteryLow: Bool,
+        highDataUsage: Bool,
+        routerNotConnected: Bool,
+        simLocked: Bool,
+        offloading: Bool
     ) -> NSImage {
         switch state {
         case .noHotspot:
@@ -111,9 +142,59 @@ enum IconRenderer {
         return img
     }
 
+    /// Appends a faded `heat.waves` glyph to the right of `base`, preserving
+    /// its template-ness so the pair still adapts to the menu-bar appearance.
+    /// The glyph is drawn in the icon's main colour at reduced opacity, which
+    /// reads as grey next to the full-opacity badge.
+    private static func appendingHeatGlyph(to base: NSImage, fraction: CGFloat = 0.45) -> NSImage {
+        // Template images are tinted by AppKit from their mask, so black is
+        // the "main colour" there; faded/badged icons are already white-on-*.
+        let glyph = tintedSFIcon(
+            "heat.waves",
+            color: base.isTemplate ? .black : .white,
+            pointSize: 11
+        )
+
+        let gap: CGFloat = 2
+        let size = NSSize(
+            width:  base.size.width + gap + glyph.size.width,
+            height: max(base.size.height, glyph.size.height)
+        )
+
+        let result = NSImage(size: size, flipped: false) { _ in
+            base.draw(in: NSRect(
+                x: 0,
+                y: (size.height - base.size.height) / 2,
+                width: base.size.width,
+                height: base.size.height
+            ))
+
+            glyph.draw(
+                in: NSRect(
+                    x: base.size.width + gap,
+                    y: (size.height - glyph.size.height) / 2,
+                    width: glyph.size.width,
+                    height: glyph.size.height
+                ),
+                from: .zero,
+                operation: .sourceOver,
+                fraction: fraction
+            )
+
+            return true
+        }
+
+        result.isTemplate = base.isTemplate
+        return result
+    }
+
     /// Renders an SF Symbol as a non-template image in an explicit colour.
-    private static func tintedSFIcon(_ name: String, color: NSColor) -> NSImage {
-        let sizeCfg  = NSImage.SymbolConfiguration(pointSize: 14, weight: .regular)
+    private static func tintedSFIcon(
+        _ name: String,
+        color: NSColor,
+        pointSize: CGFloat = 14
+    ) -> NSImage {
+        let sizeCfg  = NSImage.SymbolConfiguration(pointSize: pointSize, weight: .regular)
         let colorCfg = NSImage.SymbolConfiguration(paletteColors: [color])
         let cfg      = sizeCfg.applying(colorCfg)
         let img      = NSImage(systemSymbolName: name, accessibilityDescription: nil)?

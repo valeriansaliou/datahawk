@@ -197,7 +197,8 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
                         highDataUsage: metrics?.isHighDataUsage ?? false,
                         routerNotConnected: metrics.map { !$0.isRouterConnected } ?? false,
                         simLocked: metrics?.isSimLocked ?? false,
-                        offloading: metrics?.isOffloading ?? false
+                        offloading: metrics?.isOffloading ?? false,
+                        overheating: metrics?.isOverheating ?? false
                     )
                 }
             }
@@ -213,7 +214,8 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
         highDataUsage: Bool,
         routerNotConnected: Bool = false,
         simLocked: Bool = false,
-        offloading: Bool = false
+        offloading: Bool = false,
+        overheating: Bool = false
     ) {
         switch state {
         case .loading:
@@ -252,7 +254,8 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
                 highDataUsage: highDataUsage,
                 routerNotConnected: routerNotConnected,
                 simLocked: simLocked,
-                offloading: offloading
+                offloading: offloading,
+                overheating: overheating
             )
         }
     }

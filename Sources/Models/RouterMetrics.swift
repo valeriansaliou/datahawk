@@ -186,6 +186,10 @@ struct RouterMetrics {
         return state.caseInsensitiveCompare("Normal") != .orderedSame
     }
 
+    /// `true` when either the chassis or the battery reports a temperature
+    /// problem — drives the heat glyph in the status-bar icon.
+    var isOverheating: Bool { deviceTempCritical || isBatteryTempAbnormal }
+
     // MARK: - SMS
 
     /// `true` when the router's SMS feature is supported and ready to use.

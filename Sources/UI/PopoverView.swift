@@ -193,7 +193,7 @@ struct HeaderSection: View {
                         .font(.system(size: 15.5))
                         .foregroundColor(batteryIconColor(m))
                     if m.isHeatThrottledCharging {
-                        Image(systemName: "heat.waves")
+                        Image(systemName: "timer")
                             .font(.system(size: 10.5))
                             .foregroundColor(m.isBatteryLow ? .red : .secondary)
                             .help("Charging slowed down or paused: battery is too hot")
@@ -244,7 +244,8 @@ struct HeaderSection: View {
 
         guard let pct = m.batteryPercent else { return "\u{2014}" }
 
-        if m.isCharging    { return "\(pct)% (Charging)" }
+        if m.isHeatThrottledCharging { return "\(pct)% (Slow Charging)" }
+        if m.isCharging             { return "\(pct)% (Charging)" }
         if m.isBatteryLow  { return "\(pct)% (Low Battery)" }
 
         return "\(pct)%"
