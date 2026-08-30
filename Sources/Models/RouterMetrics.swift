@@ -41,6 +41,29 @@ struct RouterMetrics {
     /// Carrier name, e.g. "Orange F", "Verizon".
     var provider: String
 
+    /// ISO 3166-1 alpha-3 code of the country the router is registered in,
+    /// e.g. "AUT". `nil` when the router does not report it.
+    var countryCode: String?
+
+    /// Flag emoji for `countryCode`, or `nil` when absent or unmappable.
+    var countryFlag: String? {
+        guard let countryCode else {
+            return nil
+        }
+
+        return CountryFlag.emoji(forISO3: countryCode)
+    }
+
+    /// Localized country name for `countryCode`, e.g. "Austria". `nil` when
+    /// absent or unmappable.
+    var countryName: String? {
+        guard let countryCode else {
+            return nil
+        }
+
+        return CountryFlag.name(forISO3: countryCode)
+    }
+
     /// Whether the device is currently roaming (i.e. not on the home network).
     var isRoaming: Bool
 

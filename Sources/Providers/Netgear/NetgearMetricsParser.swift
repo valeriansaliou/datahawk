@@ -57,6 +57,12 @@ extension NetgearProvider {
             "sim.SPN"
         ) ?? "Unknown"
 
+        // -- Country ----------------------------------------------------------
+        // ISO 3166-1 alpha-3, e.g. "AUT". Empty when the router has no
+        // registration yet.
+        let countryCode = stringValue(model, "wwanadv.country")
+            .flatMap { $0.isEmpty ? nil : $0 }
+
         // -- Roaming ----------------------------------------------------------
         // wwan.roaming is a plain boolean; wwan.roamingType is unreliable (always "Home").
         // Resolved early because parseDataUsage needs it to choose the right
@@ -173,6 +179,7 @@ extension NetgearProvider {
             connectionStatus:         connectionStatus,
             signalStrength:           min(max(bars, 0), 5),
             provider:                 provider,
+            countryCode:              countryCode,
             isRoaming:                isRoaming,
             isSimLocked:              isSimLocked,
             dataUsedGB:               dataUsedGB,

@@ -219,26 +219,48 @@ struct MetricsSection: View {
                     }
                 }
 
-                // Group 3: data usage (the limit is conveyed by the bar's fill).
-                if let used = m.dataUsedGB {
+                // Group 3: the registered country, then data usage (the limit
+                // is conveyed by the bar's fill).
+                // An unmappable code still gets a row, showing the raw value.
+                let country: (flag: String?, label: String)? = m.countryCode.map { code in
+                    (m.countryFlag, m.countryFlag == nil ? code : (m.countryName ?? code))
+                }
+
+                if m.dataUsedGB != nil || country != nil {
                     Divider()
 
                     metricGroup {
-                        metricRow("Data usage") {
-                            HStack(spacing: 6) {
-                                // No limit configured on the router: the bar
-                                // would have no scale to fill against.
-                                if let pct = m.dataUsagePercent {
-                                    DataUsageBar(
-                                        percent: pct,
-                                        color: dataLeftColor(1.0 - pct)
-                                    )
-                                    .help(dataUsageTooltip(pct, limit: m.dataLimitGB))
-                                }
+                        if let country {
+                            metricRow(m.isRoaming ? "Roaming from" : "Home network") {
+                                // The flag stays out of the monospaced font so
+                                // it doesn't get padded to a character cell.
+                                HStack(spacing: 3) {
+                                    if let flag = country.flag {
+                                        Text(flag)
+                                    }
 
-                                Text(String(format: "%.2f GB", used))
-                                    .fontDesign(.monospaced)
-                                    .fixedSize()
+                                    Text(country.label).fontDesign(.monospaced)
+                                }
+                            }
+                        }
+
+                        if let used = m.dataUsedGB {
+                            metricRow("Data usage") {
+                                HStack(spacing: 6) {
+                                    // No limit configured on the router: the bar
+                                    // would have no scale to fill against.
+                                    if let pct = m.dataUsagePercent {
+                                        DataUsageBar(
+                                            percent: pct,
+                                            color: dataLeftColor(1.0 - pct)
+                                        )
+                                        .help(dataUsageTooltip(pct, limit: m.dataLimitGB))
+                                    }
+
+                                    Text(String(format: "%.2f GB", used))
+                                        .fontDesign(.monospaced)
+                                        .fixedSize()
+                                }
                             }
                         }
                     }
