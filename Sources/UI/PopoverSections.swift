@@ -219,27 +219,26 @@ struct MetricsSection: View {
                     }
                 }
 
-                // Group 3: data usage (only when at least one value is known).
-                if m.dataUsedGB != nil || m.dataLimitGB != nil || m.dataUsagePercent != nil {
+                // Group 3: data usage (the limit is conveyed by the bar's fill).
+                if let used = m.dataUsedGB {
                     Divider()
 
                     metricGroup {
-                        if let pct = m.dataUsagePercent {
-                            metricRow("Data left") {
-                                Text(String(format: "%.1f%%", (1.0 - pct) * 100))
-                                    .fontDesign(.monospaced)
-                            }
-                        }
-                        if let used = m.dataUsedGB {
-                            metricRow("Data used") {
+                        metricRow("Data usage") {
+                            HStack(spacing: 6) {
+                                // No limit configured on the router: the bar
+                                // would have no scale to fill against.
+                                if let pct = m.dataUsagePercent {
+                                    DataUsageBar(
+                                        percent: pct,
+                                        color: dataLeftColor(1.0 - pct)
+                                    )
+                                    .help(dataUsageTooltip(pct, limit: m.dataLimitGB))
+                                }
+
                                 Text(String(format: "%.2f GB", used))
                                     .fontDesign(.monospaced)
-                            }
-                        }
-                        if let limit = m.dataLimitGB {
-                            metricRow("Data limit") {
-                                Text(String(format: "%.0f GB", limit))
-                                    .fontDesign(.monospaced)
+                                    .fixedSize()
                             }
                         }
                     }
@@ -307,6 +306,24 @@ struct MetricsSection: View {
     }
 
     // MARK: - Formatters
+
+    /// Colour for the remaining-data bar, warming up as the allowance runs out.
+    private func dataLeftColor(_ left: Double) -> Color {
+        if left <= 0.10 { return .red }
+        if left <= 0.20 { return .orange }
+        if left <= 0.30 { return .yellow }
+
+        return .green
+    }
+
+    /// Tooltip spelling out what the bar's fill stands for.
+    private func dataUsageTooltip(_ pct: Double, limit: Double?) -> String {
+        let used = String(format: "%.1f%% used", pct * 100)
+
+        guard let limit else { return used }
+
+        return used + String(format: " of %.0f GB", limit)
+    }
 
     private func offloadIcon(_ link: OffloadLink) -> String {
         switch link {

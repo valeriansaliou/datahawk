@@ -8,17 +8,20 @@ import SwiftUI
 
 // MARK: - Data usage progress bar
 
-/// Animated horizontal bar that fills proportionally to data consumption.
-/// Colour transitions green -> orange -> red as usage increases.
+/// Animated horizontal bar that fills proportionally to `percent`.
+/// The caller owns the fill colour so the bar can carry the same semantic
+/// tint as the metric it illustrates.
 struct DataUsageBar: View {
-    /// Fraction of the data cap consumed (0.0 - 1.0).
+    /// Fraction of the bar that is filled (0.0 - 1.0).
     let percent: Double
 
-    private var barColor: Color {
-        if percent < 0.70 { return .green }
-        if percent < 0.90 { return .orange }
-        return .red
-    }
+    /// Fill colour.
+    let color: Color
+
+    private static let height: CGFloat = 6
+
+    /// Clamped fill fraction, safe to multiply a width by.
+    private var fraction: CGFloat { CGFloat(min(max(percent, 0), 1)) }
 
     var body: some View {
         GeometryReader { geo in
@@ -26,16 +29,15 @@ struct DataUsageBar: View {
                 // Track (background).
                 RoundedRectangle(cornerRadius: 3)
                     .fill(Color.secondary.opacity(0.15))
-                    .frame(height: 6)
 
                 // Fill (foreground).
                 RoundedRectangle(cornerRadius: 3)
-                    .fill(barColor)
-                    .frame(width: geo.size.width * CGFloat(percent), height: 6)
+                    .fill(color)
+                    .frame(width: geo.size.width * fraction)
                     .animation(.easeOut(duration: 0.4), value: percent)
             }
         }
-        .frame(height: 6)
+        .frame(height: Self.height)
     }
 }
 
