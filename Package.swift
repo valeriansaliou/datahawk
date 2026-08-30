@@ -1,6 +1,7 @@
 // swift-tools-version: 6.0
-// This file exists solely for IDE / LSP support (sourcekit-lsp).
-// The project is built with the Makefile — do not use `swift build`.
+// This file backs IDE / LSP support (sourcekit-lsp) and the incremental
+// `make app-dev` build. Shipping builds go through `make app`, which uses a
+// single optimised `swiftc` invocation — don't call `swift build` by hand.
 import PackageDescription
 
 let package = Package(
@@ -10,6 +11,11 @@ let package = Package(
         .executableTarget(
             name: "DataHawk",
             path: "Sources",
+            swiftSettings: [
+                // Match the Makefile's `swiftc` invocation, which defaults to
+                // the Swift 5 language mode.
+                .swiftLanguageMode(.v5)
+            ],
             linkerSettings: [
                 .linkedFramework("CoreWLAN"),
                 .linkedFramework("SystemConfiguration"),

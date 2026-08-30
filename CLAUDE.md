@@ -16,18 +16,19 @@ Developer context for Claude Code. Read this before making changes.
 
 ## Build system
 
-The project uses a plain `Makefile` with `xcrun swiftc` — no Xcode project, no Swift Package Manager for the binary itself (the `Package.swift` is only for LSP/SourceKit support).
+The project uses a plain `Makefile` — no Xcode project. Shipping builds go through `xcrun swiftc`; development builds go through SwiftPM (`Package.swift` also backs LSP/SourceKit).
 
 ```bash
-make app          # build DataHawk.app
-make app-dev      # build + kill existing process + reopen (use after every change)
+make app-dev      # incremental debug build + restart (use after every change)
+make app          # optimised build of DataHawk.app (what ships)
+make app-release-dev  # optimised build + restart
 make dmg          # package DataHawk.app into DataHawk.dmg
 make notarize     # notarize and staple an already-built DMG
 make release      # full release: dmg + notarize (requires SIGN_ID)
 make clean        # remove .build/ and build artefacts
 ```
 
-**Always run `make app-dev` after a successful build** to kill the running instance and reopen the app. The binary runs as a background agent (`LSUIElement = true`) so it doesn't appear in the Dock.
+**Always run `make app-dev` after a change** — it rebuilds, kills the running instance and reopens the app. The binary runs as a background agent (`LSUIElement = true`) so it doesn't appear in the Dock.
 
 Code signing is optional and interactive. Pass `SIGN_ID` to skip the prompt:
 ```bash
@@ -36,7 +37,9 @@ make SIGN_ID="Developer ID Application: ..."
 echo 'export SIGN_ID=...' >> local.env   # local.env is gitignored via -include
 ```
 
-All `.swift` files under `Sources/` are compiled in a single `swiftc` invocation — no incremental compilation.
+**Two compilers, deliberately.** `make app` passes every `.swift` file under `Sources/` to one optimised `swiftc` invocation (~15 s, no incremental compilation) — that's the binary that ships. `make app-dev` instead runs `swift build --scratch-path .build/spm`, which compiles incrementally at `-Onone`: ~7 s cold, **~1.3 s after a one-file edit**, restart included. It then drops the debug binary into `DataHawk.app`, stamps the version and re-signs.
+
+Because `app-dev` uses SwiftPM, `Package.swift` is now load-bearing: it pins `.swiftLanguageMode(.v5)` to match `swiftc`'s default (tools-version 6.0 would otherwise compile in Swift 6 mode, where the `static let shared` singletons and `ISO8601DateFormatter` statics are hard errors). Adding a framework to `SWIFT_FLAGS` may need a matching `.linkedFramework` in `Package.swift`.
 
 ---
 
@@ -456,7 +459,7 @@ The Sessions map button in `AdminButtonSection` is conditional on `ConfigStore.r
 ## Known limitations / planned work
 
 - **Single vendor** (NETGEAR). Provider pattern is in place for others.
-- **No incremental compilation** — every build recompiles all sources.
+- **Release builds have no incremental compilation** — `make app` recompiles all sources every time. Development builds (`make app-dev`) are incremental via SwiftPM.
 - **Location "always" permission** is requested, though "when in use" would suffice for foreground BSSID detection. This is a known over-ask.
 - **Sessions table doesn't auto-scroll on selection.** Tapping a map pin selects the session and switches to the List tab, but the SwiftUI `Table` does not scroll the selected row into view — the user may need to scroll manually.
 

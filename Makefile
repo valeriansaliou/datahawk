@@ -29,6 +29,11 @@ APPLE_APP_PASSWORD  ?=
 
 TARGET     := arm64-apple-macos26.0
 
+# SwiftPM scratch dir + debug binary, used by the incremental `app-dev` build.
+SPM_TRIPLE  := arm64-apple-macosx
+SPM_SCRATCH := $(BUILD_DIR)/spm
+SPM_BIN     := $(SPM_SCRATCH)/$(SPM_TRIPLE)/debug/$(APPNAME)
+
 SWIFT      := xcrun swiftc
 SWIFT_FLAGS := \
   -O \
@@ -47,7 +52,7 @@ SWIFT_FLAGS := \
 # All Swift sources, sorted for deterministic compilation order
 SOURCES    := $(shell find Sources -name "*.swift" | sort)
 
-.PHONY: app app-dev dmg icon notarize release clean
+.PHONY: app app-dev app-release-dev restart dmg icon notarize release clean
 
 $(ICNS): Icon/CreateIcon.swift
 	@echo "==> Generating $(ICNS)..."
@@ -78,11 +83,40 @@ app: $(SOURCES) $(ICNS) Resources/Info.plist
 	@mv "$(APP_BUNDLE)" "$(DIST_APP)"
 	@echo "Built $(DIST_APP) ($(VERSION))"
 
-app-dev: app
+# Fast development build. Uses SwiftPM's incremental, unoptimised compiler
+# instead of the single whole-module `swiftc` invocation `app` runs, so a
+# one-file edit rebuilds in under a second instead of ~14 s. The bundle it
+# produces is debug (-Onone) and must never be shipped — use `make app`
+# (or `make app-release-dev`) for that.
+app-dev: $(ICNS) Resources/Info.plist
+	@swift build --scratch-path "$(SPM_SCRATCH)"
+	@mkdir -p "$(DIST_APP)/Contents/MacOS" "$(DIST_APP)/Contents/Resources"
+	@cp "$(SPM_BIN)" "$(DIST_APP)/Contents/MacOS/$(APPNAME)"
+	@cp $(ICNS) "$(DIST_APP)/Contents/Resources/AppIcon.icns"
+	@cp Resources/Info.plist "$(DIST_APP)/Contents/Info.plist"
+	@/usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $(VERSION)" "$(DIST_APP)/Contents/Info.plist"
+	@/usr/libexec/PlistBuddy -c "Set :CFBundleVersion $(VERSION)" "$(DIST_APP)/Contents/Info.plist"
+	@if [ -n "$(SIGN_ID)" ]; then \
+	  codesign --force --options runtime --sign "$(SIGN_ID)" "$(DIST_APP)"; \
+	else \
+	  echo "==> WARNING: No SIGN_ID provided, skipping code signing."; \
+	fi
+	@$(MAKE) --no-print-directory restart
+	@echo "Restarted $(APPNAME) ($(VERSION), debug)"
+
+# Optimised build + restart — same binary that ships, for a final check.
+app-release-dev: app restart
+	@echo "Restarted $(APPNAME) ($(VERSION), release)"
+
+# Poll for the old process to actually exit rather than sleeping a fixed 0.5 s —
+# it usually dies in a few tens of milliseconds. Bounded at ~3 s so a wedged
+# process can't hang the build.
+restart:
 	@pkill -x "$(APPNAME)" 2>/dev/null || true
-	@sleep 0.5
+	@i=0; while pgrep -x "$(APPNAME)" >/dev/null 2>&1 && [ $$i -lt 60 ]; do \
+	  sleep 0.05; i=$$((i + 1)); \
+	done
 	@open "$(DIST_APP)"
-	@echo "Restarted $(APPNAME)"
 
 dmg: $(DIST_APP)
 	@echo "==> Packaging $(DMG_NAME)"
