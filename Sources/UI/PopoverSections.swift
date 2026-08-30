@@ -308,13 +308,11 @@ struct MetricsSection: View {
     // MARK: - Formatters
 
     /// Colour for the data-usage bar, warming up as the allowance runs out.
-    /// Green is reserved for a barely-touched allowance; white is the neutral
-    /// mid-range fill.
+    /// White is the neutral fill for anything not yet close to the limit.
     private func dataLeftColor(_ left: Double) -> Color {
         if left <= 0.10 { return .red }
         if left <= 0.20 { return .orange }
         if left <= 0.30 { return .yellow }
-        if left >= 0.80 { return .green }
 
         return .white
     }
