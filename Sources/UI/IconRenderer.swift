@@ -30,9 +30,10 @@ enum IconRenderer {
     ///   - state:              Current connection state.
     ///   - networkType:        Cellular generation (used for the text badge).
     ///   - batteryLow:         When `true` the badge is rendered in red.
-    ///   - highDataUsage:      When `true` the badge is rendered in orange.
+    ///   - highDataUsage:      When `true` a faded dollarsign glyph is appended to
+    ///                         the right of the connected icon.
     ///   - routerNotConnected: When `true` the text badge is rendered at 35 % opacity.
-    ///   - simLocked:          When `true` an orange SIM card icon is shown.
+    ///   - simLocked:          When `true` an orange "SIM" badge is shown.
     ///   - offloading:         When `true` a wave icon replaces the network badge —
     ///                         the cellular generation is irrelevant while the
     ///                         router routes over Ethernet or upstream WiFi.
@@ -52,22 +53,28 @@ enum IconRenderer {
             state: state,
             networkType: networkType,
             batteryLow: batteryLow,
-            highDataUsage: highDataUsage,
             routerNotConnected: routerNotConnected,
             simLocked: simLocked,
             offloading: offloading
         )
 
-        guard overheating, case .connected = state else { return base }
+        guard case .connected = state else { return base }
 
-        return appendingHeatGlyph(to: base)
+        var icon = base
+        if highDataUsage {
+            icon = appendingGlyph("dollarsign", to: icon)
+        }
+        if overheating {
+            icon = appendingGlyph("heat.waves", to: icon)
+        }
+
+        return icon
     }
 
     private static func baseIcon(
         state: ConnectionState,
         networkType: NetworkType?,
         batteryLow: Bool,
-        highDataUsage: Bool,
         routerNotConnected: Bool,
         simLocked: Bool,
         offloading: Bool
@@ -85,7 +92,7 @@ enum IconRenderer {
             return sfSymbol("antenna.radiowaves.left.and.right")
 
         case .connected:
-            if simLocked  { return tintedSFIcon("simcard", color: .orange) }
+            if simLocked  { return textIcon("SIM", backgroundColor: .orange, badgeSymbol: "simcard") }
             if offloading { return sfSymbol("wave.3.right") }
 
             let type = networkType ?? .unknown
@@ -97,8 +104,7 @@ enum IconRenderer {
                 return sfSymbol("cellularbars")
             default:
                 if routerNotConnected { return faded(textIcon(type.rawValue, color: .white)) }
-                if highDataUsage      { return textIcon(type.rawValue, backgroundColor: .orange) }
-                if batteryLow         { return textIcon(type.rawValue, backgroundColor: .systemRed) }
+                if batteryLow         { return textIcon(type.rawValue, backgroundColor: .systemRed, badgeSymbol: "battery.0percent") }
                 return textIcon(type.rawValue)
             }
         }
@@ -142,15 +148,19 @@ enum IconRenderer {
         return img
     }
 
-    /// Appends a faded `heat.waves` glyph to the right of `base`, preserving
-    /// its template-ness so the pair still adapts to the menu-bar appearance.
+    /// Appends a faded SF Symbol to the right of `base`, preserving its
+    /// template-ness so the pair still adapts to the menu-bar appearance.
     /// The glyph is drawn in the icon's main colour at reduced opacity, which
     /// reads as grey next to the full-opacity badge.
-    private static func appendingHeatGlyph(to base: NSImage, fraction: CGFloat = 0.45) -> NSImage {
+    private static func appendingGlyph(
+        _ symbol: String,
+        to base: NSImage,
+        fraction: CGFloat = 0.45
+    ) -> NSImage {
         // Template images are tinted by AppKit from their mask, so black is
         // the "main colour" there; faded/badged icons are already white-on-*.
         let glyph = tintedSFIcon(
-            "heat.waves",
+            symbol,
             color: base.isTemplate ? .black : .white,
             pointSize: 11
         )
@@ -210,10 +220,13 @@ enum IconRenderer {
     /// - `backgroundColor`: When set, draws a rounded filled box in that colour
     ///                      with white text — used for alert states (battery low,
     ///                      high data usage) instead of coloured text.
+    /// - `badgeSymbol`:     SF Symbol drawn inside the box, right of the label.
+    ///                      Ignored without a `backgroundColor`.
     private static func textIcon(
         _ label: String,
         color: NSColor? = nil,
-        backgroundColor: NSColor? = nil
+        backgroundColor: NSColor? = nil,
+        badgeSymbol: String? = nil
     ) -> NSImage {
         let sizeAttrs: [NSAttributedString.Key: Any] = [
             .font: NSFont.monospacedSystemFont(ofSize: 11, weight: .semibold),
@@ -226,8 +239,15 @@ enum IconRenderer {
         let hPad: CGFloat = backgroundColor != nil ? 6 : 1
         let vPad: CGFloat = backgroundColor != nil ? 2 : 0
 
+        // Glyph sits inside the box, right of the label — full opacity, like the
+        // label itself, since the badge colour already carries the alert.
+        let glyph: NSImage? = backgroundColor != nil
+            ? badgeSymbol.map { tintedSFIcon($0, color: .white, pointSize: 11) }
+            : nil
+        let glyphGap: CGFloat = glyph != nil ? 2 : 0
+
         let imgSize = NSSize(
-            width:  ceil(textSize.width)  + hPad * 2,
+            width:  ceil(textSize.width) + glyphGap + (glyph?.size.width ?? 0) + hPad * 2,
             height: ceil(textSize.height) + vPad * 2
         )
 
@@ -251,6 +271,20 @@ enum IconRenderer {
                     in: NSRect(x: hPad, y: vPad, width: textSize.width, height: textSize.height),
                     withAttributes: drawAttrs
                 )
+
+                if let glyph {
+                    glyph.draw(
+                        in: NSRect(
+                            x: hPad + ceil(textSize.width) + glyphGap,
+                            y: (imgSize.height - glyph.size.height) / 2,
+                            width: glyph.size.width,
+                            height: glyph.size.height
+                        ),
+                        from: .zero,
+                        operation: .sourceOver,
+                        fraction: 1.0
+                    )
+                }
             } else {
                 let drawAttrs: [NSAttributedString.Key: Any] = [
                     .font:            NSFont.monospacedSystemFont(ofSize: 11, weight: .semibold),
