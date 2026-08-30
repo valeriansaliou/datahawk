@@ -231,7 +231,7 @@ struct MetricsSection: View {
 
                     metricGroup {
                         if let country {
-                            metricRow(m.isRoaming ? "Roaming from" : "Home network") {
+                            metricRow(m.isRoaming ? "Roaming from" : "At home in") {
                                 // The flag stays out of the monospaced font so
                                 // it doesn't get padded to a character cell.
                                 HStack(spacing: 3) {
