@@ -211,9 +211,6 @@ struct MetricsSection: View {
                                 .buttonStyle(.plain)
                                 .foregroundStyle(.secondary)
                                 .help("See connected clients")
-                                .onHover { inside in
-                                    if inside { NSCursor.pointingHand.push() } else { NSCursor.pop() }
-                                }
                             }
                         }
                     }
@@ -260,6 +257,18 @@ struct MetricsSection: View {
                                     Text(String(format: "%.2f GB", used))
                                         .fontDesign(.monospaced)
                                         .fixedSize()
+
+                                    Button {
+                                        ResetDataUsageAlert.confirmAndReset()
+                                    } label: {
+                                        Image(
+                                            systemName: "dollarsign.arrow.trianglehead.counterclockwise.rotate.90"
+                                        )
+                                        .font(.system(size: 10.5))
+                                    }
+                                    .buttonStyle(.plain)
+                                    .foregroundStyle(.secondary)
+                                    .help("Reset data usage counter")
                                 }
                             }
                         }

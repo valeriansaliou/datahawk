@@ -175,6 +175,50 @@ final class RouterService {
         }
     }
 
+    // MARK: - Data usage actions
+
+    /// Resets the router's billing-cycle data usage counter.
+    ///
+    /// Like `deleteAllSMS`, not optimistic: the provider reads `model.json`
+    /// back once the router confirms the write and that snapshot is published
+    /// here, so the zeroed counter is on screen by the time this returns. A
+    /// failure falls back to a plain refresh.
+    ///
+    /// `isFetching` is raised for the duration so the popover's header spinner
+    /// reports the in-flight write — the confirmation alert is a standard
+    /// `NSAlert` and closes on click, so this is where the progress shows.
+    ///
+    /// - Returns: `nil` on success, a human-readable error string on failure.
+    @discardableResult
+    func resetDataUsage() async -> String? {
+        guard let config = currentConfig,
+              let provider = providers[config.vendor] else {
+            return "No hotspot is currently connected"
+        }
+
+        AppState.shared.isFetching = true
+
+        do {
+            let metrics = try await provider.resetDataUsage(
+                config: config, baseURL: baseURL(for: config)
+            )
+
+            AppState.shared.metrics     = metrics
+            AppState.shared.lastUpdated = Date()
+            AppState.shared.isFetching  = false
+
+            return nil
+        } catch {
+            // Lowered before the resync: refresh() no-ops while isFetching.
+            AppState.shared.isFetching = false
+
+            // Resync: the reset may have landed even though the read-back failed.
+            refresh()
+
+            return Self.humanReadable(error)
+        }
+    }
+
     /// Flips the read flag of one message inside the published metrics and
     /// keeps `smsUnreadCount` in sync. No-op when the message is gone or
     /// already in the requested state.

@@ -52,6 +52,18 @@ protocol RouterProvider: Sendable {
     /// - Throws: `ProviderError` when the router rejects the delete, or
     ///           `URLError` for transport-level issues.
     func deleteAllSMS(config: HotspotConfig, baseURL: String) async throws -> RouterMetrics
+
+    /// Resets the router's billing-cycle data usage counter to zero.
+    ///
+    /// - Parameters:
+    ///   - config:  The hotspot configuration (credentials, vendor, etc.).
+    ///   - baseURL: Resolved admin URL for the router.
+    /// - Returns: The router's state as read back *after* the reset, so the
+    ///            caller can publish the zeroed counter without paying for a
+    ///            second round-trip.
+    /// - Throws: `ProviderError` when the router rejects the write, or
+    ///           `URLError` for transport-level issues.
+    func resetDataUsage(config: HotspotConfig, baseURL: String) async throws -> RouterMetrics
 }
 
 extension RouterProvider {
@@ -66,6 +78,11 @@ extension RouterProvider {
     /// Vendors without an SMS write API inherit this.
     func deleteAllSMS(config: HotspotConfig, baseURL: String) async throws -> RouterMetrics {
         throw ProviderError("This router does not support deleting messages")
+    }
+
+    /// Vendors without a usage-counter reset API inherit this.
+    func resetDataUsage(config: HotspotConfig, baseURL: String) async throws -> RouterMetrics {
+        throw ProviderError("This router does not support resetting the data usage counter")
     }
 }
 

@@ -162,11 +162,38 @@ actor NetgearProvider: RouterProvider {
             fields:   ["sms.deleteAll": "1"]
         )
 
-        let updated = try await fetchJSON(session, "\(base)/api/model.json")
+        let updated = try await fetchModel(session, base: base)
 
         guard parseSMSMessages(updated).isEmpty else {
             throw ProviderError("Router did not delete the messages")
         }
+
+        return extractMetrics(from: updated, baseURL: base)
+    }
+
+    // MARK: - Data usage actions
+
+    /// Zeroes the billing-cycle data usage counter.
+    ///
+    /// Same shape as `deleteAllSMS`: one `/Forms/config` write followed by a
+    /// `model.json` read-back inside the same lock, so the caller can publish
+    /// the reset counter straight away and no poll can interleave and
+    /// republish the pre-reset value.
+    func resetDataUsage(config: HotspotConfig, baseURL: String) async throws -> RouterMetrics {
+        await RouterLock.shared.acquire()
+        defer { RouterLock.shared.release() }
+
+        let base = normalizedBase(baseURL)
+        let (session, model) = try await authenticatedSession(config: config, base: base)
+
+        try await postConfig(
+            session,
+            baseURL:  base,
+            secToken: try secToken(from: model),
+            fields:   ["wwan.dataUsage.generic.reset": "1"]
+        )
+
+        let updated = try await fetchModel(session, base: base)
 
         return extractMetrics(from: updated, baseURL: base)
     }
@@ -186,7 +213,7 @@ actor NetgearProvider: RouterProvider {
         try await fetchRaw(session, "\(base)/sess_cd_tmp")
 
         // Step 2: Read the security token from the public model.
-        let pubModel = try await fetchJSON(session, "\(base)/api/model.json")
+        let pubModel = try await fetchModel(session, base: base)
         let token    = try secToken(from: pubModel)
 
         // Step 3: POST credentials to authenticate the session.
@@ -195,7 +222,7 @@ actor NetgearProvider: RouterProvider {
         )
 
         // Step 4: Fetch the full (authenticated) model.
-        let model = try await fetchJSON(session, "\(base)/api/model.json")
+        let model = try await fetchModel(session, base: base)
 
         // Persist the auth cookies for subsequent fast-path refreshes.
         if let url = URL(string: base) {
@@ -222,7 +249,7 @@ actor NetgearProvider: RouterProvider {
         if let cookies = cachedCookies[base] {
             let session = sessionWithCookies(cookies)
 
-            if let model = try? await fetchJSON(session, "\(base)/api/model.json"),
+            if let model = try? await fetchModel(session, base: base),
                isAuthenticated(model) {
                 return (session, model)
             }
@@ -270,8 +297,8 @@ actor NetgearProvider: RouterProvider {
 
         for attempt in 1...attempts {
             do {
-                let model = try await fetchModelWithCookies(
-                    cookies, base: base, requestTimeout: 5
+                let model = try await fetchModel(
+                    sessionWithCookies(cookies, requestTimeout: 5), base: base
                 )
 
                 // session.userRole == "Admin" means the cookie is still valid.
@@ -291,18 +318,6 @@ actor NetgearProvider: RouterProvider {
         }
 
         return .stale
-    }
-
-    /// Fetches `/api/model.json` with pre-seeded cookies (no login).
-    private func fetchModelWithCookies(
-        _ cookies: [HTTPCookie],
-        base: String,
-        requestTimeout: TimeInterval = 8
-    ) async throws -> [String: Any] {
-        try await fetchJSON(
-            sessionWithCookies(cookies, requestTimeout: requestTimeout),
-            "\(base)/api/model.json"
-        )
     }
 
     /// Builds a fresh ephemeral session pre-seeded with cached auth cookies.
@@ -357,12 +372,14 @@ actor NetgearProvider: RouterProvider {
 
     // MARK: - HTTP primitives
 
-    /// GETs a URL expecting a JSON dictionary response.
-    private func fetchJSON(
+    /// GETs `/api/model.json` — the router's single state document, and the
+    /// only JSON endpoint this provider reads. The path is built here so no
+    /// call site has to repeat it.
+    private func fetchModel(
         _ session: URLSession,
-        _ rawURL: String
+        base: String
     ) async throws -> [String: Any] {
-        guard let url = URL(string: rawURL) else {
+        guard let url = URL(string: "\(base)/api/model.json") else {
             throw ProviderError("Invalid router URL — check Settings")
         }
 
