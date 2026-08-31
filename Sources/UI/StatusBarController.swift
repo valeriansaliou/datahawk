@@ -147,7 +147,10 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
         // Local monitor: catches ESC key (not handled natively with
         // .applicationDefined behaviour).
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            if event.keyCode == 53 {  // 53 = Escape
+            // A modal alert raised from inside the popover (e.g. the data
+            // usage reset confirmation) owns Escape: swallowing it here would
+            // dismiss the popover and leave the alert on screen.
+            if event.keyCode == 53, NSApp.modalWindow == nil {  // 53 = Escape
                 // Local event monitors are invoked on the main thread.
                 MainActor.assumeIsolated { self?.hidePopover() }
                 return nil
