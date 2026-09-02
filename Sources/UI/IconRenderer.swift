@@ -214,6 +214,37 @@ enum IconRenderer {
         return img
     }
 
+    /// `NSFont`'s factory methods are imported as non-optional, but they can
+    /// still hand back nil (font server hiccup on a long-lived process, seen
+    /// after sleep/wake). Swift stores that nil in a non-optional reference
+    /// without complaining, and it only aborts much later — when CoreText
+    /// copies the attributes dictionary during `NSString.draw`, as
+    /// `-[__NSPlaceholderDictionary initWithObjects:forKeys:count:]: attempt
+    /// to insert nil object`. A raw-pointer check is the only way to spot it,
+    /// since `??` doesn't apply to a value the compiler thinks can't be nil.
+    private static func resolved(_ font: NSFont) -> NSFont? {
+        unsafeBitCast(font, to: UnsafeRawPointer?.self) == nil ? nil : font
+    }
+
+    /// Attributes for the menu-bar text badge, with a nil-safe font.
+    ///
+    /// The `.font` key is dropped entirely when every candidate comes back
+    /// nil: CoreText then falls back to its own default face, which is a badly
+    /// drawn icon for one frame instead of a crash.
+    private static func labelAttributes(color: NSColor) -> [NSAttributedString.Key: Any] {
+        var attrs: [NSAttributedString.Key: Any] = [.foregroundColor: color]
+
+        let font = resolved(NSFont.monospacedSystemFont(ofSize: 11, weight: .semibold))
+            ?? resolved(NSFont.systemFont(ofSize: 11, weight: .semibold))
+            ?? resolved(NSFont.boldSystemFont(ofSize: 11))
+
+        if let font {
+            attrs[.font] = font
+        }
+
+        return attrs
+    }
+
     /// Renders a short text label (e.g. "5G", "4G") as a menu-bar image.
     ///
     /// - `color`:           Tints the text; `nil` produces a template image.
@@ -228,10 +259,7 @@ enum IconRenderer {
         backgroundColor: NSColor? = nil,
         badgeSymbol: String? = nil
     ) -> NSImage {
-        let sizeAttrs: [NSAttributedString.Key: Any] = [
-            .font: NSFont.monospacedSystemFont(ofSize: 11, weight: .semibold),
-            .foregroundColor: NSColor.black,
-        ]
+        let sizeAttrs = labelAttributes(color: .black)
 
         let nsLabel  = label as NSString
         let textSize = nsLabel.size(withAttributes: sizeAttrs)
@@ -255,10 +283,7 @@ enum IconRenderer {
             if let bg = backgroundColor {
                 // Resolve text colour inside the drawing closure so
                 // NSAppearance.current reflects the actual rendering context.
-                let drawAttrs: [NSAttributedString.Key: Any] = [
-                    .font:            NSFont.monospacedSystemFont(ofSize: 11, weight: .semibold),
-                    .foregroundColor: NSColor.white,
-                ]
+                let drawAttrs = labelAttributes(color: .white)
 
                 let path = NSBezierPath(
                     roundedRect: NSRect(origin: .zero, size: imgSize),
@@ -286,10 +311,7 @@ enum IconRenderer {
                     )
                 }
             } else {
-                let drawAttrs: [NSAttributedString.Key: Any] = [
-                    .font:            NSFont.monospacedSystemFont(ofSize: 11, weight: .semibold),
-                    .foregroundColor: color ?? NSColor.black,
-                ]
+                let drawAttrs = labelAttributes(color: color ?? .black)
 
                 nsLabel.draw(
                     in: NSRect(x: hPad, y: vPad, width: textSize.width, height: textSize.height),
