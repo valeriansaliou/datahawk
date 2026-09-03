@@ -16,7 +16,7 @@ _💡 Want to [add a hotspot vendor](./Sources/Providers)? We accept PRs!_
 
 ## Screenshots
 
-![DataHawk app menu](https://github.com/user-attachments/assets/07978787-c3e6-49d0-ab6a-0268f4e76c67)
+![DataHawk app menu](https://github.com/user-attachments/assets/9b623e8d-d040-42cc-92fc-f78db1359e5e)
 _DataHawk appears in your menu bar. It periodically polls the status of your hotspot, if it detects you are connected to it._
 
 ---
