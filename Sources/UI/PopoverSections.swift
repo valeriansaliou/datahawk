@@ -219,9 +219,15 @@ struct MetricsSection: View {
                 // Group 3: the registered country, then data usage (the limit
                 // is conveyed by the bar's fill).
                 // An unmappable code still gets a row, showing the raw value.
-                let country: (flag: String?, label: String)? = m.countryCode.map { code in
-                    (m.countryFlag, m.countryFlag == nil ? code : (m.countryName ?? code))
-                }
+                // Suppressed while the modem isn't on a network: the router
+                // keeps reporting the last registered country, which would
+                // claim "At home in <foreign country>" during registration.
+                let hasCellular = m.isRouterConnected && m.networkType != .noSignal
+                let country: (flag: String?, label: String)? = hasCellular
+                    ? m.countryCode.map { code in
+                        (m.countryFlag, m.countryFlag == nil ? code : (m.countryName ?? code))
+                    }
+                    : nil
 
                 if m.dataUsedGB != nil || country != nil {
                     Divider()
