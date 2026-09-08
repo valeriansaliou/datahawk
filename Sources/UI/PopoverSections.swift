@@ -218,15 +218,14 @@ struct MetricsSection: View {
 
                 // Group 3: the registered country, then data usage (the limit
                 // is conveyed by the bar's fill).
-                // An unmappable code still gets a row, showing the raw value.
                 // Suppressed while the modem isn't on a network: the router
                 // keeps reporting the last registered country, which would
                 // claim "At home in <foreign country>" during registration.
+                // An unmappable code (the router sometimes reports "000") is
+                // dropped too rather than shown raw — it can't be trusted.
                 let hasCellular = m.isRouterConnected && m.networkType != .noSignal
-                let country: (flag: String?, label: String)? = hasCellular
-                    ? m.countryCode.map { code in
-                        (m.countryFlag, m.countryFlag == nil ? code : (m.countryName ?? code))
-                    }
+                let country: (flag: String, label: String)? = hasCellular
+                    ? m.countryFlag.map { ($0, m.countryName ?? m.countryCode ?? "") }
                     : nil
 
                 if m.dataUsedGB != nil || country != nil {
@@ -238,9 +237,7 @@ struct MetricsSection: View {
                                 // The flag stays out of the monospaced font so
                                 // it doesn't get padded to a character cell.
                                 HStack(spacing: 3) {
-                                    if let flag = country.flag {
-                                        Text(flag)
-                                    }
+                                    Text(country.flag)
 
                                     Text(country.label).fontDesign(.monospaced)
                                 }
