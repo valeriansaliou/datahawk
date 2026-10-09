@@ -1,0 +1,12 @@
+opencollection: 1.0.0
+info:
+  name: "NETGEAR Nighthawk"
+  type: workspace
+
+collections:
+  - name: "NETGEAR Nighthawk"
+    path: "collections/NETGEAR Nighthawk"
+
+specs:
+
+docs: ''
